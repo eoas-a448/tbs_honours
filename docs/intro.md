@@ -1,0 +1,1 @@
+I will begin by downloading GOES-16/17 datasets for the period of August-September 2019 with the spatial bounds of longitude = (-135, -116.5) and latitude = (28, 38.5)
