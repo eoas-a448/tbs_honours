@@ -13,6 +13,10 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import os
 
 CMAP = "Greys"
+# VMIN = -20
+# VMAX = 30
+VMIN = 0 #These are for radiances
+VMAX = 130
 
 def main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, out_file):
 

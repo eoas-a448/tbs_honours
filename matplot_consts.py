@@ -11,8 +11,12 @@ from matplotlib import colors
 
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
-VMIN = -5
-VMAX = 25
+# VMIN = -5
+# VMAX = 25
+# VMIN = -20
+# VMAX = 30
+# VMIN = 0 #These two are for radiances
+# VMAX = 130
 CMAP = "Greys"
 
 def main_func():
@@ -42,13 +46,13 @@ def main_func():
     # Customizing the plot border
     ax.outline_patch.set_linewidth(0.3)
 
-    # Plot colorbar
-    norm = colors.Normalize(vmin=VMIN, vmax=VMAX)
-    cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=CMAP), ax=ax, extend='neither', spacing='proportional',
-                        orientation = 'horizontal')
-    cbar.ax.tick_params(labelsize=6, labelcolor='black', width=0.5, direction='out', pad=1.0)
-    cbar.set_label(label='Brightness Temperature Difference (BTD)', size=6, color='black', weight='normal')
-    cbar.outline.set_linewidth(0.5)
+    #Plot colorbar
+    # norm = colors.Normalize(vmin=VMIN, vmax=VMAX)
+    # cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=CMAP), ax=ax, extend='neither', spacing='proportional',
+    #                     orientation = 'horizontal')
+    # cbar.ax.tick_params(labelsize=6, labelcolor='black', width=0.5, direction='out', pad=1.0)
+    # cbar.set_label(label='Brightness Temperature Difference (BTD)', size=6, color='black', weight='normal')
+    # cbar.outline.set_linewidth(0.5)
 
     # Sets X axis characteristics
     xticks = np.arange(LLLon,URLon,2)
