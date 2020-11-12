@@ -15,7 +15,11 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import os
 from skimage import feature
 from skimage import filters
+from skimage import morphology
+from skimage import transform
 from skimage.segmentation import active_contour
+from cv2 import cv2
+from PIL import Image
 
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
@@ -73,12 +77,11 @@ loncor, latcor = GOES.get_lonlat_corners(lons, lats)
 # Make BTD
 var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
-####TESTING########
+# Make Canny
 var = np.where(calc_BTD.bt_ch14_temp_conv(var_ch14) < 5, np.nan, var)
 var = np.where(var < 2, np.nan, var)
 # var = np.where(var > 18, np.nan, var)
 var = feature.canny(var, sigma = 0.3, low_threshold = 3, high_threshold = 10) # High threshold between 8-10
-###################
 
 plot.main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, os.path.join(OUT_DIR, '0.png'))
 
@@ -109,22 +112,66 @@ for ds_name_7 in data_list_7:
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
-    ####TESTING########
+    # Make Canny
     var = np.where(calc_BTD.bt_ch14_temp_conv(var_ch14) < 5, np.nan, var)
     var = np.where(var < 2, np.nan, var)
-    # var = np.where(var > 18, np.nan, var)
-    var = feature.canny(var, sigma = 0.3, low_threshold = 3, high_threshold = 10) # High threshold between 8-10
-    ###################
+    var = feature.canny(var, sigma = 0.3, low_threshold = 3, high_threshold = 10) # Was 0.3, 3, 10 #But maybe try HT set to 8?
+    var = np.where(var == np.nan, 0, var)
 
-    # ####TESTING########
-    
+    #####TESTING########
     # # var = np.where(var < 2, np.nan, var)
-    # # var = np.where(var > 18, np.nan, var)
-    # var = filters.hessian(var, gamma=15) # High threshold between 8-10
-    # var = np.where(calc_BTD.bt_ch14_temp_conv(var_ch14) < 5, np.nan, var)
-    # ###################
+    # var = filters.hessian(var, gamma=15)
+    # var = np.where(calc_BTD.bt_ch14_temp_conv(var_ch14) < 5, 0, var)
+    # var = np.where(var < 1, 0, var)
+    ####################
 
-    plot.main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, file_path)
+    #########TESTING#######
+    # # Hough line transform
+    # var = np.array(var).astype('uint8')
+    # img = cv2.cvtColor(var*255, cv2.COLOR_GRAY2BGR)
+
+    # rho = 100
+    # theta = np.pi/2
+    # threshold = 10
+    # minLineLength = 20
+    # maxLineGap = 0
+
+    # lines = cv2.HoughLinesP(var, rho = rho, theta = theta, threshold = threshold, minLineLength = minLineLength, maxLineGap = maxLineGap)
+    # if lines is not None:
+    #     N = lines.shape[0]
+    #     for j in range(N):
+    #         x1 = lines[j][0][0]
+    #         y1 = lines[j][0][1]
+    #         x2 = lines[j][0][2]
+    #         y2 = lines[j][0][3]
+    #         cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+    # cv2.imwrite(file_path, img)
+    #######################
+
+    ########TESTING#########
+    # Skimage hough line transform
+    var = np.array(var).astype('uint8')
+    img = cv2.cvtColor(var*255, cv2.COLOR_GRAY2BGR)
+
+    threshold = 0
+    minLineLength = 30
+    maxLineGap = 1
+    theta = np.linspace(-np.pi, np.pi, 1000)
+
+    lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
+
+    if lines is not None:
+        for line in lines:
+            p0, p1 = line
+            x1 = p0[0]
+            y1 = p0[1]
+            x2 = p1[0]
+            y2 = p1[1]
+            cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+    cv2.imwrite(file_path, img)
+    ########################
+
+    # plot.main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, file_path)
 
     print("Image " + str(i) + " Complete")
     i = i + 1
