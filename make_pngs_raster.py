@@ -15,6 +15,11 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import os
 import scipy
 import rasterio
+from rasterio import mask
+import rioxarray
+import xarray
+import geopandas
+from shapely.geometry import mapping
 from skimage import feature
 from skimage import filters
 from skimage import morphology
@@ -24,13 +29,15 @@ from skimage.restoration import denoise_nl_means, estimate_sigma
 from cv2 import cv2
 from PIL import Image
 
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-sep12/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-sep12/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
+TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
 OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
+COASTLINE_SHP = "/Users/tschmidt/repos/tgs_honours/good_data/coastlines/land_polygons.shp"
 # Defines the plot area
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
@@ -45,6 +52,50 @@ if ".DS_Store" in data_list_7:
 data_list_7 = sorted(data_list_7)
 first_ds_name = data_list_7.pop(0)
 first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
+
+####RASTERIO####
+kernel_size = 8
+xds = xarray.open_dataset(first_ds_path)
+
+first_tiff_path = os.path.join(TIFF_DIR, "test.tif")
+# xds["Rad"].rio.to_raster(first_tiff_path)
+SatHeight = xds['goes_imager_projection'].perspective_point_height
+SatLon = xds['goes_imager_projection'].longitude_of_projection_origin
+SatSweep = xds['goes_imager_projection'].sweep_angle_axis
+X = xds['x']
+Y = xds['y']
+var_ch07 = xds["Rad"]
+var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
+                                        LLLon, URLon, LLLat, URLat)
+
+# xds = xds.drop_vars(["x","y","Rad","DQF"])
+# xds['x'] = ('x', X[514:1185])
+# xds['y'] = ('y', Y[883:1364])
+# xds = xds.rio.set_spatial_dims('x','y') # Uneeded???
+# xds["Rad"] = (('y','x'), var_ch07)
+
+xds = xds.sel(y=slice(*[Y[883],Y[1363]]),x=slice(*[X[514],X[1184]]))
+# xds = xds.assign_coords({"lons": (("y","x"), np.where(lons==-999.99, np.nan, lons))}) #TODO: REMOVE -999s
+# xds = xds.assign_coords({"lats": (("y","x"),  np.where(lats==-999.99, np.nan, lats))}) #TODO: REMOVE -999s
+
+xds["lons"] = (("y","x"), np.where(lons==-999.99, np.nan, lons)) #????
+xds["lats"] = (("y","x"), np.where(lons==-999.99, np.nan, lons))
+
+xds = xds.rio.set_crs(rasterio.crs.CRS.from_string("epsg:3857")) #TODO: REMOVE THIS HARDCODING
+rad_data = xds["Rad"]
+rad_data = rad_data.rio.set_crs(rasterio.crs.CRS.from_string("epsg:3857")) #TODO: REMOVE THIS HARDCODING
+rad_data.rio.to_raster(first_tiff_path)
+src = rasterio.open(first_tiff_path, mode='r+')
+
+geodf = geopandas.read_file("/Users/tschmidt/repos/tgs_honours/good_data/coastlines/land_polygons.shp")
+
+out = mask.mask(src, geodf[['geometry']].values.flatten())
+
+print(out)
+
+# scipy.ndimage.filters.generic_filter(data, np.nanmean, size = kernel_size)
+############
+
 first_ds = Dataset(first_ds_path)
 SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height
 SatLon = first_ds.variables['goes_imager_projection'].longitude_of_projection_origin
@@ -115,46 +166,16 @@ for ds_name_7 in data_list_7:
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
-    # Filter out the land
-    # (This is temporarilly hardcoded. Wil use shapefile later with rasterio)
-    lons = np.where(lons==-999.99, np.nan, lons)
-    lats = np.where(lats==-999.99, np.nan, lats)
-    var = np.where(lons > -118.5, np.nan, var)
-    var = np.where(np.logical_and(lons > -124.5, lats > 33.75), np.nan, var)
-
-    # Create mask array for the highest clouds
-    high_cloud_mask = calc_BTD.bt_ch14_temp_conv(var_ch14) < 5 # TODO: Make this more robust
-
     #####TESTING######
-    # Use "golden arches" to filter out open ocean data
-    kernel_size = (3,3) # 2 or 3 seems optimal
-    BT = np.where(high_cloud_mask, np.nan, calc_BTD.bt_ch14_temp_conv(var_ch14)) # Remove highest clouds since they are the most irregular
-    BT_local_mean = scipy.ndimage.filters.generic_filter(BT, np.mean, kernel_size)
-    BT_local_SD = scipy.ndimage.filters.generic_filter(BT, np.std, kernel_size)
-
-    # plot.scatter_plt(BT_local_mean, BT_local_SD, "/Users/tschmidt/repos/tgs_honours/output/derp.png")
-
-    mean_cutoff = np.nanpercentile(BT_local_mean, 50)
-    SD_cutoff = np.nanpercentile(BT_local_SD, 95)
-
-    # mean_cutoff = (np.nanmax(BT_local_mean)-np.nanmin(BT_local_mean))*0.70 # Was 0.90
-    # SD_cutoff = (np.nanmax(BT_local_SD)-np.nanmin(BT_local_SD))*0.33 # Was 0.15
-    golden_arch_mask = np.logical_and(BT_local_mean > mean_cutoff, BT_local_SD < SD_cutoff)
-
-    # mean_cutoff = (np.nanmax(BT_local_mean)-np.nanmin(BT_local_mean))*0.65
-    # SD_cutoff = (np.nanmax(BT_local_SD)-np.nanmin(BT_local_SD))*0.15
-    # golden_arch_mask = np.logical_or(BT_local_mean > mean_cutoff, BT_local_SD > SD_cutoff)
-
-    var = np.where(golden_arch_mask, np.nan, var)
+    # # Use "golden arches" to filter out open ocean data
+    # kernel_size = (8,8)
+    # scipy.ndimage.filters.generic_filter()
     #################
 
-    #Filter out the cold high altitude clouds
-    var = np.where(high_cloud_mask, np.nan, var)
-
     # Make Canny
+    var = np.where(calc_BTD.bt_ch14_temp_conv(var_ch14) < 5, np.nan, var)
     # var = np.where(var < 2, np.nan, var)
-    # 0.8, 3, 7 worked for hard case!!!!!!
-    var = feature.canny(var, sigma = 0.8, low_threshold = 3, high_threshold = 7) # Was 0.3, 3, 10 #But maybe try HT set to 8?
+    var = feature.canny(var, sigma = 0.3, low_threshold = 3, high_threshold = 10) # Was 0.3, 3, 10 #But maybe try HT set to 8?
     var = np.where(var == np.nan, 0, var)
 
     #####TESTING########
@@ -192,7 +213,6 @@ for ds_name_7 in data_list_7:
     var = np.array(var).astype('uint8')
     img = cv2.cvtColor(var*255, cv2.COLOR_GRAY2BGR)
 
-    # Was 0, 30, 1
     threshold = 0
     minLineLength = 30
     maxLineGap = 1
