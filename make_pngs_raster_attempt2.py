@@ -29,7 +29,8 @@ from skimage.restoration import denoise_nl_means, estimate_sigma
 from cv2 import cv2
 from PIL import Image
 
-import pyresample
+from pyresample import SwathDefinition, kd_tree
+from pyresample.geometry import AreaDefinition
 from pyproj import CRS, Transformer
 from affine import Affine
 
@@ -57,27 +58,66 @@ if ".DS_Store" in data_list_7:
 data_list_7 = sorted(data_list_7)
 first_ds_name = data_list_7.pop(0)
 first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
-
-####RASTERIO####
-# src = rasterio.open(first_ds_path)
-# derp = src.indexes
-
-# src = xarray.open_rasterio(first_ds_path, parse_coordinates=False)
-
-# print(type(src))
-first_tiff_path = os.path.join(TIFF_DIR, "test.tif")
-
-########## X_array ##########
-xds = xarray.open_dataset(first_ds_path)
-SatHeight = xds['goes_imager_projection'].perspective_point_height
-SatLon = xds['goes_imager_projection'].longitude_of_projection_origin
-SatSweep = xds['goes_imager_projection'].sweep_angle_axis
-X = xds['x']
-Y = xds['y']
-var_ch07 = xds["Rad"]
-#############################
+####RASTERIO####################
+first_ds = Dataset(first_ds_path)
+SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height
+SatLon = first_ds.variables['goes_imager_projection'].longitude_of_projection_origin
+SatSweep = first_ds.variables['goes_imager_projection'].sweep_angle_axis
+X = first_ds.variables['x']
+Y = first_ds.variables['y']
+var_ch07 = first_ds.variables["Rad"]
 var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
                                         LLLon, URLon, LLLat, URLat)
+var_ch07 = np.where(lons==-999.99, np.nan, var_ch07) #UNEEDED???
+
+first_tiff_path = os.path.join(TIFF_DIR, "test.tif")
+
+# Reproject the sat projection to mercator #################
+height = var_ch07.shape[0] # TODO: MAKE SURE THESE ARE THE RIGHT WAY AROUND
+width = var_ch07.shape[1]
+p_crs = CRS.from_epsg(3857)
+p_latlon = CRS.from_proj4("+proj=latlon")
+transform = Transformer.from_crs(p_latlon,p_crs)
+ll_x, ll_y = transform.transform(LLLon, LLLat)
+ur_x, ur_y = transform.transform(URLon, URLat)
+area_extent = (ll_x, ll_y, ur_x, ur_y)
+pixel_size_x = (ur_x - ll_x)/(width - 1)
+pixel_size_y = (ur_y - ll_y)/(height - 1)
+ul_x = ll_x # Why these?
+ul_y = ur_y
+
+area_id = "California Coast"
+description = "See area ID"
+proj_id = "Mercator"
+swath_def = SwathDefinition(lons, lats)
+new_affine = Affine(pixel_size_x, 0.0, ul_x, 0.0, -pixel_size_y, ul_y)
+area_def = AreaDefinition(area_id, description, proj_id, p_crs,
+                            width, height, area_extent)
+
+fill_value = -999.99
+var_ch07_merc = kd_tree.resample_nearest(
+    swath_def,
+    var_ch07.ravel(),
+    area_def,
+    radius_of_influence=5000,
+     nprocs=2,
+    fill_value=fill_value
+)
+with rasterio.open(
+    first_tiff_path,
+    "w",
+    driver="GTiff",
+    height=height,
+    width=width,
+    count=1, #????
+    dtype=var_ch07_merc.dtype,
+    crs=p_crs,
+    transform=new_affine,
+    nodata=fill_value,
+) as dst:
+    dst.write(np.reshape(var_ch07_merc,(1,height,width))) #???
+####################
+
 
 src = rasterio.open(first_tiff_path, mode='r+')
 
@@ -86,7 +126,7 @@ geodf = geopandas.read_file("/Users/tschmidt/repos/tgs_honours/good_data/coastli
 out = mask.mask(src, geodf[['geometry']].values.flatten())
 
 print(out)
-############
+################
 
 first_ds = Dataset(first_ds_path)
 SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height

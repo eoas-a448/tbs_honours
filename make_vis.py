@@ -15,8 +15,8 @@ import os
 
 from cv2 import cv2
 
-DATA_DIR_1 = "/Users/tschmidt/repos/tgs_honours/good_data/16-vis-apr24/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
+DATA_DIR_1 = "/Users/tschmidt/repos/tgs_honours/good_data/16-vis-may13/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-may13/"
 OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
 GAMMA = 2.2
 # Defines the plot area
