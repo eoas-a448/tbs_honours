@@ -21,10 +21,10 @@ CMAP = "Greys"
 
 def main_func():
     # Defines map projection
-    MapProj = ccrs.PlateCarree()
+    MapProj = ccrs.Mercator() # Used to be PlateCarree
 
     # Defines field projection
-    FieldProj = ccrs.PlateCarree()
+    FieldProj = ccrs.Mercator() # Used to be PlateCarree
 
     # Creates figure
     fig = plt.figure(dpi=150, figsize=(12, 9))
