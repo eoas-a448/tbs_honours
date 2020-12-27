@@ -32,12 +32,12 @@ from affine import Affine
 from rasterio import mask
 import geopandas
 
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-sep12/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-sep12/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-may13/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-may13/"
 TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
@@ -133,7 +133,7 @@ geodf = None # Free memory
 #######################################
 
 # if you want to use pcolormesh to plot data you will need calcute the corners of each pixel
-loncor, latcor = GOES.get_lonlat_corners(lons, lats)
+# loncor, latcor = GOES.get_lonlat_corners(lons, lats)
 
 i = 0
 for ds_name_7 in data_list_7:
@@ -152,6 +152,14 @@ for ds_name_7 in data_list_7:
     var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
                                     LLLon, URLon, LLLat, URLat)
     var_ch07 = np.where(lons==-999.99, np.nan, var_ch07)
+    var_ch07 = kd_tree.resample_nearest(
+        swath_def,
+        var_ch07.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
 
     # Load channel 14
     X = ds_14.variables['x']
@@ -160,18 +168,17 @@ for ds_name_7 in data_list_7:
     var_ch14, lons, lats, extra = GOES.slice_sat_image(var_ch14, X, Y, SatLon, SatHeight, SatSweep,
                                     LLLon, URLon, LLLat, URLat)
     var_ch14 = np.where(lons==-999.99, np.nan, var_ch14)
-
-    # Make BTD
-    var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
-    var = kd_tree.resample_nearest(
+    var_ch14 = kd_tree.resample_nearest(
         swath_def,
-        var.ravel(),
+        var_ch14.ravel(),
         area_def,
         radius_of_influence=5000,
         nprocs=2,
         fill_value=fill_value
     )
-    var = np.where(var==-999.99, np.nan, var)
+
+    # Make BTD
+    var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
     # Filter out the land
     # lons = np.where(lons==-999.99, np.nan, lons)
@@ -183,14 +190,13 @@ for ds_name_7 in data_list_7:
     # Create mask array for the highest clouds
     high_cloud_mask = calc_BTD.bt_ch14_temp_conv(var_ch14) < 5 # TODO: Make this more robust
 
-    #####TESTING######
-    # Use "golden arches" to filter out open ocean data
+    ### Use "golden arches" to filter out open ocean data ################
     kernel_size = (3,3) # 2 or 3 seems optimal
     BT = np.where(high_cloud_mask, np.nan, calc_BTD.bt_ch14_temp_conv(var_ch14)) # Remove highest clouds since they are the most irregular
     BT_local_mean = scipy.ndimage.filters.generic_filter(BT, np.mean, kernel_size)
     BT_local_SD = scipy.ndimage.filters.generic_filter(BT, np.std, kernel_size)
 
-    # plot.scatter_plt(BT_local_mean, BT_local_SD, "/Users/tschmidt/repos/tgs_honours/output/derp.png")
+    # plot.scatter_plt(BT_local_mean, BT_local_SD, "/Users/tschmidt/repos/tgs_honours/output/arch.png")
 
     mean_cutoff = np.nanpercentile(BT_local_mean, 50)
     SD_cutoff = np.nanpercentile(BT_local_SD, 95)
@@ -204,7 +210,7 @@ for ds_name_7 in data_list_7:
     # golden_arch_mask = np.logical_or(BT_local_mean > mean_cutoff, BT_local_SD > SD_cutoff)
 
     var = np.where(golden_arch_mask, np.nan, var)
-    #################
+    #####################################################################
 
     #Filter out the cold high altitude clouds
     var = np.where(high_cloud_mask, np.nan, var)
@@ -245,8 +251,7 @@ for ds_name_7 in data_list_7:
     # cv2.imwrite(file_path, img)
     #######################
 
-    ########TESTING#########
-    # Skimage hough line transform
+    ## Skimage hough line transform #################################
     var = np.array(var).astype('uint8')
     img = cv2.cvtColor(var*255, cv2.COLOR_GRAY2BGR)
 
@@ -258,6 +263,9 @@ for ds_name_7 in data_list_7:
 
     lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
 
+    #############################################################
+
+    # Make line plots
     if lines is not None:
         for line in lines:
             p0, p1 = line
@@ -267,7 +275,6 @@ for ds_name_7 in data_list_7:
             y2 = p1[1]
             cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
     cv2.imwrite(file_path, img)
-    ########################
 
     # plot.main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, file_path)
 

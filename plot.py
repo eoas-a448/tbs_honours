@@ -30,7 +30,9 @@ def main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, out_file):
 def scatter_plt(var1, var2, out_file):
     fig = plt.figure(dpi=150, figsize=(12, 9))
     ax = fig.add_axes([0.1, 0.16, 0.80, 0.75])
-    ax.scatter(var1, var2)
+    ax.scatter(var1, var2, s=1)
+    ax.set_xlabel("Local Mean Brightness Temperature °C")
+    ax.set_ylabel("Local Standard Deviation Brightness Temperature °C")
     
     # Save image
     canvas = FigureCanvas(fig)

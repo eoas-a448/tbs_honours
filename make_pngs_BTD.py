@@ -153,6 +153,14 @@ for ds_name_7 in data_list_7:
     var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
                                     LLLon, URLon, LLLat, URLat)
     var_ch07 = np.where(lons==-999.99, np.nan, var_ch07)
+    var_ch07 = kd_tree.resample_nearest(
+        swath_def,
+        var_ch07.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
 
     # Load channel 14
     X = ds_14.variables['x']
@@ -161,18 +169,18 @@ for ds_name_7 in data_list_7:
     var_ch14, lons, lats, extra = GOES.slice_sat_image(var_ch14, X, Y, SatLon, SatHeight, SatSweep,
                                     LLLon, URLon, LLLat, URLat)
     var_ch14 = np.where(lons==-999.99, np.nan, var_ch14)
-
-    # Make BTD
-    var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
-    var = kd_tree.resample_nearest(
+    var_ch14 = kd_tree.resample_nearest(
         swath_def,
-        var.ravel(),
+        var_ch14.ravel(),
         area_def,
         radius_of_influence=5000,
         nprocs=2,
         fill_value=fill_value
     )
-    var = np.where(var==-999.99, np.nan, var)
+
+    # Make BTD
+    var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
+    
     var[land_masking] = np.nan
 
     # # Filter out the land

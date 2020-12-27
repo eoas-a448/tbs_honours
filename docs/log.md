@@ -16,4 +16,6 @@ I tried to filter out any data with a BT higher than a fixed threshold. Unlike t
 
 I have now expanded my proccess to include both an edge detection step and a following straight-line detection step. The concept being that the straighter edges (after various data filtering steps) would indicate ship tracks with an acceptable level of error. As of today (Nov.12) I have tried Canny edge detection, a Hessian filter, and a non-local mean denoising filter for the edge detection step. For the line detection I have used a Probablistic Hough Transform. So far I have had mixed results. In relativly ideal scenarios (lots of ship tracks, low noise) the canny edge detection and probablistic Hough transform combination seems to work fairly well, but in non-ideal situations it seems to fail quite badly. The most obvious solution at this point is to use more data filtering steps where "obvious non shiptrack structures" such as non-cloud data is removed beforehand. This is still being discussed with phil. <br>
 
-Hough transform of a hough transform?
+Hough transform of a hough transform? <br>
+
+Check if openstreetmaps is copyrighted \<----------------
