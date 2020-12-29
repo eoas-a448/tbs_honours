@@ -17,10 +17,13 @@ class MultiTrackerImproved:
 
             if not success and not self.previous_states[i]:
                 trackers_to_delete.append(i)
+            elif success and self.previous_states[i]:
+                self.previous_states[i] = success
+                self.boxes[i] = box
             else:
                 self.previous_states[i] = success
-                if success:
-                    self.boxes[i] = box
+                if not success:
+                    self.boxes[i] = None
             
             i = i + 1
 
