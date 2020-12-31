@@ -23,6 +23,7 @@ from skimage.segmentation import active_contour
 from skimage.restoration import denoise_nl_means, estimate_sigma
 from cv2 import cv2
 from PIL import Image
+import copy
 
 # Land masking system
 import rasterio
@@ -35,12 +36,12 @@ import geopandas
 
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-sep12/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-sep12/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-may13/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-may13/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
 TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
 LAND_POLYGON_SHAPE = "/Users/tschmidt/repos/tgs_honours/good_data/coastlines_merc/land_polygons.shp"
 OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
@@ -101,7 +102,8 @@ new_affine = Affine(pixel_size_x, 0.0, ul_x, 0.0, -pixel_size_y, ul_y)
 area_def = AreaDefinition(area_id, description, proj_id, p_crs,
                             width, height, area_extent) # TODO: Check to make sure that this is meant to be set to the target CRS
 
-fill_value = -999.99 # Same as missing values for goes package
+# fill_value = -999.99 # Same as missing values for goes package
+fill_value = np.nan
 var_ch07_merc = kd_tree.resample_nearest(
     swath_def,
     var_ch07.ravel(),
@@ -134,7 +136,7 @@ geodf = None # Free memory
 #######################################
 
 # Init multi-tracker
-trackers = MultiTrackerImproved(cv2.TrackerKCF_create)
+trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
 i = 0
 for ds_name_7 in data_list_7:
@@ -181,13 +183,24 @@ for ds_name_7 in data_list_7:
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
+    # Make copy of the BTD for use as a backround in cv2 image output
+    # Maps the BTD values to a range of [0,255]
+    BTD = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
+    BTD_img = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
+    min_BTD = np.nanmin(BTD_img)
+    if min_BTD < 0:
+        BTD_img = BTD_img + np.abs(min_BTD)
+    max_BTD = np.nanmax(BTD_img)
+    BTD_img = BTD_img/max_BTD
+    BTD_img = cv2.cvtColor(BTD_img*255, cv2.COLOR_GRAY2BGR)
+
     # Filter out the land
     var[land_masking] = np.nan
 
     # Create mask array for the highest clouds
     high_cloud_mask = calc_BTD.bt_ch14_temp_conv(var_ch14) < 5 # TODO: Make this more robust
 
-    ### Use "golden arches" to filter out open ocean data ################
+    ### Use "golden arches" to filter out open ocean data ################ # TODO: See if I am filtering too much?
     kernel_size = (3,3) # 2 or 3 seems optimal
     BT = np.where(high_cloud_mask, np.nan, calc_BTD.bt_ch14_temp_conv(var_ch14)) # Remove highest clouds since they are the most irregular
     BT_local_mean = scipy.ndimage.filters.generic_filter(BT, np.mean, kernel_size)
@@ -206,7 +219,18 @@ for ds_name_7 in data_list_7:
     #Filter out the cold high altitude clouds
     var = np.where(high_cloud_mask, np.nan, var)
 
-    # Make Canny
+    ##### TESTING #####################
+    # Make a copy of our var before canny is applied
+    BTD_complete = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
+    min_BTD = np.nanmin(BTD_complete)
+    if min_BTD < 0:
+        BTD_complete = BTD_complete + np.abs(min_BTD)
+    max_BTD = np.nanmax(BTD_complete)
+    BTD_complete = BTD_complete/max_BTD
+    BTD_complete = cv2.cvtColor(BTD_complete*255, cv2.COLOR_GRAY2BGR)
+    #################################
+
+    # Make Canny # TODO: Try adding more edges again?
     # 0.8, 3, 7 worked for hard case!!!!!!
     var = feature.canny(var, sigma = 0.8, low_threshold = 3, high_threshold = 7) # Was 0.3, 3, 10 #But maybe try HT set to 8?
     var = np.where(var == np.nan, 0, var)
@@ -222,11 +246,10 @@ for ds_name_7 in data_list_7:
     theta = np.linspace(-np.pi, np.pi, 1000)
 
     lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
-
     #############################################################
 
-    #### TRACKER #################
-    trackers.update(img)
+    #### TRACKER ################# #TODO: Try applying tracker to BTD instead of canny edges
+    trackers.update(BTD_complete)
     boxes = trackers.get_boxes()
 
     if lines is not None:
@@ -242,12 +265,8 @@ for ds_name_7 in data_list_7:
             max_x = np.maximum(x1,x2)
             max_y = np.maximum(y1,y2)
 
-            rect = (min_x-2, min_y-2, max_x-min_x + 4, max_y-min_y + 4)
-            trackers.add_tracker(img, rect)
-
-    for box in boxes:
-        (x, y, w, h) = [int(v) for v in box]
-        cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            rect = (min_x-2, min_y-2, max_x-min_x + 4, max_y-min_y + 4) #TODO: Maybe expand the size of the boxes a bit?
+            trackers.add_tracker(BTD_complete, rect)
     ###############################
 
     # Make line plots
@@ -258,9 +277,25 @@ for ds_name_7 in data_list_7:
             y1 = p0[1]
             x2 = p1[0]
             y2 = p1[1]
-            cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+            cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
 
-    cv2.imwrite(file_path, img)
+    # Make box plots for trackers
+    # Also make and highlight the labels
+    labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
+    for box in boxes:
+        (x, y, w, h) = [int(v) for v in box]
+
+        if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD.shape[0] and x+w <= BTD.shape[1] and y < BTD.shape[0] and x < BTD.shape[1]:
+            box_slice = BTD[y:y+h, x:x+w]
+            labels_slice = labels[y:y+h, x:x+w, 2]
+            labels_slice = np.where(box_slice >= np.nanmax(box_slice)-2, 255.0, labels_slice)
+            labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
+
+            cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+
+    BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
+    
+    cv2.imwrite(file_path, BTD_img)
 
     print("Image " + str(i) + " Complete")
     i = i + 1
