@@ -1,7 +1,7 @@
 import calc_BTD
 import plot
 import matplot_consts
-from multi_tracker import MultiTrackerImproved
+from multi_tracker_improved import MultiTrackerImproved
 
 import GOES
 from netCDF4 import Dataset
@@ -34,10 +34,10 @@ from affine import Affine
 from rasterio import mask
 import geopandas
 
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-sep12/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-sep12/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
@@ -138,11 +138,12 @@ geodf = None # Free memory
 # Init multi-tracker
 trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
+image_list = []
+BTD_list = []
+
 i = 0
 for ds_name_7 in data_list_7:
     ds_name_14 = data_list_14[i]
-    filename = str(i) + ".png"
-    file_path = os.path.join(OUT_DIR, filename)
     ds_path_7 = os.path.join(DATA_DIR_7, ds_name_7)
     ds_path_14 = os.path.join(DATA_DIR_14, ds_name_14)
     ds_7 = Dataset(ds_path_7)
@@ -200,16 +201,21 @@ for ds_name_7 in data_list_7:
     # Create mask array for the highest clouds
     high_cloud_mask = calc_BTD.bt_ch14_temp_conv(var_ch14) < 5 # TODO: Make this more robust
 
-    ### Use "golden arches" to filter out open ocean data ################ # TODO: See if I am filtering too much?
+    ### Use "golden arches" to filter out open ocean data ################ # TODO: Make this more robust. Remove the percentile system.
     kernel_size = (3,3) # 2 or 3 seems optimal
-    BT = np.where(high_cloud_mask, np.nan, calc_BTD.bt_ch14_temp_conv(var_ch14)) # Remove highest clouds since they are the most irregular
+    BT = calc_BTD.bt_ch14_temp_conv(var_ch14)
     BT_local_mean = scipy.ndimage.filters.generic_filter(BT, np.mean, kernel_size)
     BT_local_SD = scipy.ndimage.filters.generic_filter(BT, np.std, kernel_size)
 
-    # plot.scatter_plt(BT_local_mean, BT_local_SD, "/Users/tschmidt/repos/tgs_honours/output/arch.png")
+    plot.scatter_plt(BT_local_mean, BT_local_SD, "/Users/tschmidt/repos/tgs_honours/output/arch_" + str(i) + ".png")
 
-    mean_cutoff = np.nanpercentile(BT_local_mean, 50)
+    mean_cutoff = np.nanpercentile(BT_local_mean, 80) # TODO: percentile solution is bad!! FIX!!!!
     SD_cutoff = np.nanpercentile(BT_local_SD, 95)
+
+    #### TESTING #######
+    # print(mean_cutoff)
+    # print(SD_cutoff)
+    ##################
 
     golden_arch_mask = np.logical_and(BT_local_mean > mean_cutoff, BT_local_SD < SD_cutoff)
 
@@ -228,11 +234,12 @@ for ds_name_7 in data_list_7:
     max_BTD = np.nanmax(BTD_complete)
     BTD_complete = BTD_complete/max_BTD
     BTD_complete = cv2.cvtColor(BTD_complete*255, cv2.COLOR_GRAY2BGR)
+    BTD_complete = np.array(BTD_complete).astype('uint8') # Since it seems the trackers need images of type uint8
     #################################
 
     # Make Canny # TODO: Try adding more edges again?
     # 0.8, 3, 7 worked for hard case!!!!!!
-    var = feature.canny(var, sigma = 0.8, low_threshold = 3, high_threshold = 7) # Was 0.3, 3, 10 #But maybe try HT set to 8?
+    var = feature.canny(var, sigma = 0.8, low_threshold = 0, high_threshold = 7) # Was 0.3, 3, 10 #But maybe try HT set to 8?
     var = np.where(var == np.nan, 0, var)
 
     ## Skimage hough line transform #################################
@@ -241,7 +248,7 @@ for ds_name_7 in data_list_7:
 
     # Was 0, 30, 1
     threshold = 0
-    minLineLength = 30
+    minLineLength = 16
     maxLineGap = 1
     theta = np.linspace(-np.pi, np.pi, 1000)
 
@@ -249,8 +256,7 @@ for ds_name_7 in data_list_7:
     #############################################################
 
     #### TRACKER ################# #TODO: Try applying tracker to BTD instead of canny edges
-    trackers.update(BTD_complete)
-    boxes = trackers.get_boxes()
+    trackers.update(img, i)
 
     if lines is not None:
         for line in lines:
@@ -266,7 +272,7 @@ for ds_name_7 in data_list_7:
             max_y = np.maximum(y1,y2)
 
             rect = (min_x-2, min_y-2, max_x-min_x + 4, max_y-min_y + 4) #TODO: Maybe expand the size of the boxes a bit?
-            trackers.add_tracker(BTD_complete, rect)
+            trackers.add_tracker(img, rect, len(data_list_7))
     ###############################
 
     # Make line plots
@@ -278,6 +284,21 @@ for ds_name_7 in data_list_7:
             x2 = p1[0]
             y2 = p1[1]
             cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
+    
+    image_list.append(BTD_img)
+    BTD_list.append(BTD)
+
+    print("Image " + str(i) + " Calculated")
+    i = i + 1
+
+
+for i in range(len(data_list_7)):
+    filename = str(i) + ".png"
+    file_path = os.path.join(OUT_DIR, filename)
+    boxes = trackers.get_boxes(i)
+
+    BTD_img = image_list[i]
+    BTD = BTD_list[i]
 
     # Make box plots for trackers
     # Also make and highlight the labels
@@ -293,9 +314,14 @@ for ds_name_7 in data_list_7:
 
             cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
+    ####TESTING######
+    # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
+    # labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
+    # labels[:,:,2] = labels_slice
+    ################
+
     BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
-    
+
     cv2.imwrite(file_path, BTD_img)
 
     print("Image " + str(i) + " Complete")
-    i = i + 1

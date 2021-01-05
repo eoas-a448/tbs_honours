@@ -18,4 +18,12 @@ I have now expanded my proccess to include both an edge detection step and a fol
 
 Hough transform of a hough transform? <br>
 
-Check if openstreetmaps is copyrighted \<----------------
+Check if openstreetmaps is copyrighted \<---------------- <br>
+
+Object tracking can be either with the canny edges or with the original BTD data <br>
+
+TODO: Figure out if golden arches works at night. <br>
+
+TODO: Find better way of labelling the tracks within each box <br>
+
+TODO: Fix golden arches!!!!!!!!!!
