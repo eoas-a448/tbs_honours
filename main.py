@@ -14,6 +14,8 @@ current_time = start_time
 end_time = datetime.strptime(args.end, '%y%m%d-%H%M%S')
 data_dir = args.data_dir
 
+# ready.txt system must be made in main tracking script
+# it will be generated for one particular day
 while current_time <= end_time:
     while True:
         current_time_string = current_time.strftime("%y%m%d-%H%M%S")
@@ -25,5 +27,6 @@ while current_time <= end_time:
 
         time.sleep(15)
 
+    
     # Add object calls here!!!!! <---------------
     current_time = current_time + timedelta(days = 1)

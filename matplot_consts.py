@@ -75,4 +75,10 @@ def main_func():
     ax.set_xlim(LLLon, URLon)
     ax.set_ylim(LLLat, URLat)
 
-    return fig, ax, MapProj, FieldProj
+    # For scatterplots
+    fig2 = plt.figure(dpi=150, figsize=(12, 9))
+    ax2 = fig2.add_axes([0.1, 0.16, 0.80, 0.75])
+    ax2.set_xlabel("Local Mean Brightness Temperature (°C)")
+    ax2.set_ylabel("Local Standard Deviation Brightness Temperature (°C)")
+
+    return fig, ax, fig2, ax2, MapProj, FieldProj

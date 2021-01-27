@@ -22,8 +22,11 @@ Check if openstreetmaps is copyrighted \<---------------- <br>
 
 Object tracking can be either with the canny edges or with the original BTD data <br>
 
-TODO: Figure out if golden arches works at night. <br>
+TODO: Figure out if golden arches works at night. RESPONSE: Phil recommends not trying night stuff for now. I agree.<br>
 
 TODO: Find better way of labelling the tracks within each box <br>
 
-TODO: Fix golden arches!!!!!!!!!!
+TODO: Fix golden arches!!!!!!!!!! <br>
+It seems that the golden arches algorithm is primarily meant for open ocean. <br>
+
+TODO: See if we can use the conus disk for goes-17 data
