@@ -22,11 +22,19 @@ Check if openstreetmaps is copyrighted \<---------------- <br>
 
 Object tracking can be either with the canny edges or with the original BTD data <br>
 
-TODO: Figure out if golden arches works at night. RESPONSE: Phil recommends not trying night stuff for now. I agree.<br>
+TODO: Figure out if golden arches works at night. **RESPONSE:** Phil recommends not trying night stuff for now. I agree.<br>
 
 TODO: Find better way of labelling the tracks within each box <br>
 
 TODO: Fix golden arches!!!!!!!!!! <br>
 It seems that the golden arches algorithm is primarily meant for open ocean. <br>
 
-TODO: See if we can use the conus disk for goes-17 data
+TODO: See if we can use the conus disk for goes-17 data <br>
+
+TODO: Test what happens when I display full dataset for goes-17 data. See if black area still exists. **RESPONSE:** It seems to be a problem with the GOES library slice/get_lonlat functions. The data itself is fine. This means I need to figure out an alternative way of generating latlon meshes and slicing the data to a bounding box. <br>
+
+**MAJOR UPDATE JAN.27:** After numerous problems with the golden arches strat I found that the idea Phil proposed of comparing shortwave reflectivity to longwave brightness temperature has worked very well (much much better than golden arches). It seems to filter out the exact areas of the Apr.24th 2019 data I was hoping an open-ocean filter would. I am currently using kmeans to find the two clusters, but I may try more effective clustering methods later. Now it just has to be tested across more days to make sure it is truly robust. <br>
+
+NOTE: As an aside I tried the golden arch algorithm on the LR->HR resampled data to see if it worked any better. This did not seem to be the case. It did not work for either the full dataset strategy nor for the "sliced" dataset strategy I used to try to emulate the resulsts of the golden arch paper more closely. <br>
+
+TODO: Fix the issue where the resampled LR longwave data has too many parallel "stretching" lines. This is bad because it is making hough lines and tracking nearly impossible. One possible solution is to resample back to the LR dimensions after all the filtering has occured. This or I will have to resample the HR shortwave data down to the LR dimensions during the actual filtering step (lose some defintion) but I want to avoid doing this as much as possible. **Try gaussian filter with sigma of 0.8X4???? (Becuase 4 times old sigma for stretch factor)**

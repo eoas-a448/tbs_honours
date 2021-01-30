@@ -3,7 +3,7 @@ import plot
 import matplot_consts
 from multi_tracker_improved import MultiTrackerImproved
 
-import GOES
+# import GOES
 from netCDF4 import Dataset
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,28 +30,30 @@ from sklearn.cluster import KMeans
 import rasterio
 from pyresample import SwathDefinition, kd_tree
 from pyresample.geometry import AreaDefinition
-from pyproj import CRS, Transformer
+from pyproj import CRS, Transformer, Proj
 from affine import Affine
 from rasterio import mask
 import geopandas
 
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-apr24/"
-DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch2-apr24/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-aug08/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-aug08/"
+# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch2-apr24/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08-SHORT/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08-SHORT/"
+# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch2-aug08-SHORT/"
 DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
 DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-sep12/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-sep12/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08/"
+DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
+
+
 TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
 LAND_POLYGON_SHAPE = "/Users/tschmidt/repos/tgs_honours/good_data/coastlines_merc/land_polygons.shp"
 OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
 # Defines the plot area
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
+HEIGHT = 1924 # These were determined from GOES library slice in old system
+WIDTH = 2682 # TODO: TEST ROBUSTNESS OF THESE
 
 # Get projection info along with axis and fig objects for matplotlib
 fig, ax, fig2, ax2, MapProj, FieldProj = matplot_consts.main_func()
@@ -74,47 +76,56 @@ if ".DS_Store" in data_list_2:
     data_list_2.remove(".DS_Store") # For mac users
 data_list_2 = sorted(data_list_2)
 
-# Setup the sat constants used throughout the script.
-first_ds_name = data_list_7[0]
-first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
+# Make the projection object for the 500m shortwave band
+first_ds_name = data_list_2[0]
+first_ds_path = os.path.join(DATA_DIR_2, first_ds_name)
 first_ds = Dataset(first_ds_path)
-SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height
+SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height # TODO: Decide if it is bad that I am reusing these same sat constants throught the bands and day
 SatLon = first_ds.variables['goes_imager_projection'].longitude_of_projection_origin
 SatSweep = first_ds.variables['goes_imager_projection'].sweep_angle_axis
-X = first_ds.variables['x']
-Y = first_ds.variables['y']
-var_ch07 = first_ds.variables["Rad"]
-first_ds = None # Free memory
-var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
-                                        LLLon, URLon, LLLat, URLat)
-var_ch07 = np.where(lons==-999.99, np.nan, var_ch07) #UNEEDED???
+ch02_goes_proj = Proj(proj='geos', h=SatHeight, lon_0=SatLon, sweep=SatSweep)
 
-###### New land masking system #######
+# Setup additional projection constants used throughout the script.
+# TODO: When using the new latlon mesh pyproj system make sure it can handle missing values such as -999.99
+# var_ch07 = np.where(lons==-999.99, np.nan, var_ch07) # THIS IS OLD WAY OF DOING THIS ^^^^^^^
 tiff_path = os.path.join(TIFF_DIR, "0.tif")
-height = var_ch07.shape[0]
-width = var_ch07.shape[1]
 p_crs = CRS.from_epsg(3857)
 p_latlon = CRS.from_proj4("+proj=latlon")
 crs_transform = Transformer.from_crs(p_latlon,p_crs)
 ll_x, ll_y = crs_transform.transform(LLLon, LLLat)
 ur_x, ur_y = crs_transform.transform(URLon, URLat)
 area_extent = (ll_x, ll_y, ur_x, ur_y)
-pixel_size_x = (ur_x - ll_x)/(width - 1)
-pixel_size_y = (ur_y - ll_y)/(height - 1)
 ul_x = ll_x # Why these?
 ul_y = ur_y
-
 area_id = "California Coast"
 description = "See area ID"
 proj_id = "Mercator"
-swath_def = SwathDefinition(lons, lats)
+pixel_size_x = (ur_x - ll_x)/(WIDTH - 1)
+pixel_size_y = (ur_y - ll_y)/(HEIGHT - 1)
 new_affine = Affine(pixel_size_x, 0.0, ul_x, 0.0, -pixel_size_y, ul_y)
 area_def = AreaDefinition(area_id, description, proj_id, p_crs,
-                            width, height, area_extent) # TODO: Check to make sure that this is meant to be set to the target CRS
-
-# fill_value = -999.99 # Same as missing values for goes package
+                            WIDTH, HEIGHT, area_extent)
 fill_value = np.nan
-var_ch07_merc = kd_tree.resample_nearest(
+
+# Make the projection object for the 2km longwave bands (Maybe make seperate for ch7 + ch14?)
+first_ds_name = data_list_7[0]
+first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
+first_ds = Dataset(first_ds_path)
+ch07_goes_proj = Proj(proj='geos', h=SatHeight, lon_0=SatLon, sweep=SatSweep)
+
+# Load ch7 for land masking
+X = first_ds.variables['x']
+Y = first_ds.variables['y']
+var_ch07 = first_ds.variables["Rad"][:]
+X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
+lons, lats = ch07_goes_proj(X, Y, inverse=True)
+swath_def = SwathDefinition(lons, lats)
+lons = None # Free the memory from these big datasets
+lats = None
+X = None
+Y = None
+first_ds = None
+var_ch07 = kd_tree.resample_nearest(
     swath_def,
     var_ch07.ravel(),
     area_def,
@@ -122,28 +133,33 @@ var_ch07_merc = kd_tree.resample_nearest(
      nprocs=2,
     fill_value=fill_value
 )
+swath_def = None # Free the swath_def memory before the coastline interpolation
+
+###### New land masking system #######################
 with rasterio.open(
     tiff_path,
     "w",
     driver="GTiff",
-    height=height,
-    width=width,
+    height=HEIGHT,
+    width=WIDTH,
     count=1, #????
-    dtype=var_ch07_merc.dtype,
+    dtype=var_ch07.dtype,
     crs=p_crs,
     transform=new_affine,
     nodata=fill_value,
 ) as dst:
-    dst.write(np.reshape(var_ch07_merc,(1,height,width)))
+    dst.write(np.reshape(var_ch07,(1,HEIGHT,WIDTH)))
+var_ch07 = None # Free memory
 
 src = rasterio.open(tiff_path, mode='r+')
 geodf = geopandas.read_file(LAND_POLYGON_SHAPE)
 land_masking, other_affine = mask.mask(src, geodf[['geometry']].values.flatten(), invert=True, filled=False)
 land_masking = np.ma.getmask(land_masking)
-land_masking = np.reshape(land_masking, (height,width))
+land_masking = np.reshape(land_masking, (HEIGHT,WIDTH))
 src.close() # Free memory
-geodf = None # Free memory
-#######################################
+src = None
+geodf = None
+############################################################
 
 # Init multi-tracker
 trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
@@ -156,18 +172,48 @@ high_cloud_list = []
 i = 0
 for ds_name_7 in data_list_7:
     ds_name_14 = data_list_14[i]
+    ds_name_2 = data_list_2[i]
     ds_path_7 = os.path.join(DATA_DIR_7, ds_name_7)
     ds_path_14 = os.path.join(DATA_DIR_14, ds_name_14)
-    ds_7 = Dataset(ds_path_7)
-    ds_14 = Dataset(ds_path_14)
+    ds_path_2 = os.path.join(DATA_DIR_2, ds_name_2)
+    
+    # Load channel 2
+    ds_2 = Dataset(ds_path_2)
+    var_ch02 = ds_2.variables["Rad"][:]
+    X = ds_2.variables['x']
+    Y = ds_2.variables['y']
+    ds_2 = None
+    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
+    lons, lats = ch02_goes_proj(X, Y, inverse=True)
+    X = None
+    Y = None
+    swath_def = SwathDefinition(lons, lats)
+    lons = None
+    lats = None
+    var_ch02 = kd_tree.resample_nearest(
+        swath_def,
+        var_ch02.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
+    swath_def = None
+    ds_2 = None
 
     # Load channel 7
+    ds_7 = Dataset(ds_path_7)
+    var_ch07 = ds_7.variables["Rad"][:]
     X = ds_7.variables['x']
     Y = ds_7.variables['y']
-    var_ch07 = ds_7.variables["Rad"]
-    var_ch07, lons, lats, extra = GOES.slice_sat_image(var_ch07, X, Y, SatLon, SatHeight, SatSweep,
-                                    LLLon, URLon, LLLat, URLat)
-    var_ch07 = np.where(lons==-999.99, np.nan, var_ch07)
+    ds_7 = None
+    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
+    lons, lats = ch07_goes_proj(X, Y, inverse=True)
+    X = None
+    Y = None
+    swath_def = SwathDefinition(lons, lats)
+    lons = None
+    lats = None
     var_ch07 = kd_tree.resample_nearest(
         swath_def,
         var_ch07.ravel(),
@@ -176,14 +222,22 @@ for ds_name_7 in data_list_7:
         nprocs=2,
         fill_value=fill_value
     )
+    swath_def = None
+    ds_7 = None
 
     # Load channel 14
+    ds_14 = Dataset(ds_path_14)
+    var_ch14 = ds_14.variables["Rad"][:]
     X = ds_14.variables['x']
     Y = ds_14.variables['y']
-    var_ch14 = ds_14.variables["Rad"]
-    var_ch14, lons, lats, extra = GOES.slice_sat_image(var_ch14, X, Y, SatLon, SatHeight, SatSweep,
-                                    LLLon, URLon, LLLat, URLat)
-    var_ch14 = np.where(lons==-999.99, np.nan, var_ch14)
+    ds_14 = None
+    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
+    lons, lats = ch07_goes_proj(X, Y, inverse=True)
+    X = None
+    Y = None
+    swath_def = SwathDefinition(lons, lats)
+    lons = None
+    lats = None
     var_ch14 = kd_tree.resample_nearest(
         swath_def,
         var_ch14.ravel(),
@@ -192,6 +246,8 @@ for ds_name_7 in data_list_7:
         nprocs=2,
         fill_value=fill_value
     )
+    swath_def = None
+    ds_14 = None
 
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
@@ -213,92 +269,34 @@ for ds_name_7 in data_list_7:
     # Create mask array for the highest clouds
     high_cloud_mask = calc_BTD.bt_ch14_temp_conv(var_ch14) < 5 # TODO: Make this more robust
 
-    ### Use "golden arches" to filter out open ocean data ################
-    kernel_size = (4,4) # 2 or 3 seems optimal
+    #### Use reflectivity of channel 2 and BT of channel 14 to filter out open ocean data ###########
     BT = calc_BTD.bt_ch14_temp_conv(var_ch14)
-    BT_local_mean = scipy.ndimage.filters.generic_filter(BT, np.mean, kernel_size)
-    BT_local_SD = scipy.ndimage.filters.generic_filter(BT, np.std, kernel_size)
 
-    # Make splits along x axis
-    x_split_high_cloud_mask = np.array_split(high_cloud_mask, 13, axis=1)
-    x_split_land_masking = np.array_split(land_masking, 13, axis=1)
-    x_split_BT_local_mean = np.array_split(BT_local_mean, 13, axis=1)
-    x_split_BT_local_SD = np.array_split(BT_local_SD, 13, axis=1)
-    split_high_cloud_mask = []
-    split_land_masking = []
-    split_BT_local_mean = []
-    split_BT_local_SD = []
-    j = 0
+    BT = BT[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] # Filter out the land since golden arches works best when only over water
+    var_ch02 = var_ch02[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] # Filter out the land since golden arches works best when only over water
 
-    # Make splits along y axis
-    while j < len(x_split_high_cloud_mask):
-        split_high_cloud_mask.append(np.array_split(x_split_high_cloud_mask[j], 9, axis=0))
-        split_land_masking.append(np.array_split(x_split_land_masking[j], 9, axis=0))
-        split_BT_local_mean.append(np.array_split(x_split_BT_local_mean[j], 9, axis=0))
-        split_BT_local_SD.append(np.array_split(x_split_BT_local_SD[j], 9, axis=0))
-        j = j + 1
+    BT_and_CH02 = np.vstack((BT, var_ch02)).T
+    km = KMeans(n_clusters=3)
+    kmeans_labels = km.fit_predict(BT_and_CH02)
 
-    split_golden_arch_mask = np.empty((len(split_high_cloud_mask), len(split_high_cloud_mask[0])), dtype=object) # TODO: Figure out if dimensions are at all right
-    
-    # Run kmeans on each split
-    j = 0
-    while j < len(split_high_cloud_mask):
-        y_split_high_cloud_mask = split_high_cloud_mask[j]
-        y_split_land_masking = split_land_masking[j]
-        y_split_BT_local_mean = split_BT_local_mean[j]
-        y_split_BT_local_SD = split_BT_local_SD[j]
+    cluster_means = km.cluster_centers_[:, 1]
+    golden_arch_mask_ocean = kmeans_labels == np.nanargmin(cluster_means)
+    golden_arch_mask = np.zeros(var.shape, dtype=bool)
+    golden_arch_mask[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] = golden_arch_mask_ocean
 
-        k = 0
-        while k < len(y_split_high_cloud_mask):
-            BT_local_mean = y_split_BT_local_mean[k][np.logical_and(np.logical_not(y_split_land_masking[k]), np.logical_not(y_split_high_cloud_mask[k]))] # Filter out the land since golden arches works best when only over water
-            BT_local_SD = y_split_BT_local_SD[k][np.logical_and(np.logical_not(y_split_land_masking[k]), np.logical_not(y_split_high_cloud_mask[k]))] # Filter out the land since golden arches works best when only over water
+    # plot.scatter_plt(BT, var_ch02, kmeans_labels, km, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
+    # plot.hexbin(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
 
-            if len(BT_local_mean) > 2:
-                BT_mean_and_SD = np.vstack((BT_local_mean, BT_local_SD)).T
-                km = KMeans(n_clusters=3)
-                kmeans_labels = km.fit_predict(BT_mean_and_SD)
-                plot.scatter_plt(BT_local_mean, BT_local_SD, kmeans_labels, km, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/arch_" + str(i) + "_(" + str(j) + "-" + str(k) + ").png")
-
-                cluster_means = km.cluster_centers_[:, 0]
-                golden_arch_mask_ocean = kmeans_labels == np.nanargmax(cluster_means) # TODO: Is this syntax wrong???
-                if np.sum(golden_arch_mask_ocean) > len(golden_arch_mask_ocean)/3:
-                    golden_arch_mask_ocean = np.zeros(len(BT_local_mean), dtype=bool)
-            else:
-                golden_arch_mask_ocean = np.zeros(len(BT_local_mean), dtype=bool)
-
-            split_golden_arch_mask[j][k] = np.zeros(y_split_high_cloud_mask[k].shape, dtype=bool)
-            split_golden_arch_mask[j][k][np.logical_and(np.logical_not(y_split_land_masking[k]), np.logical_not(y_split_high_cloud_mask[k]))] = golden_arch_mask_ocean
-            k = k + 1
-        j = j + 1
-
-    # Rejoin splits of golden arch mask
-    x_split_golden_arch_mask = []
-    for j in split_golden_arch_mask:
-        x_split_golden_arch_mask.append(np.vstack(j))
-    
-    golden_arch_mask = np.hstack(x_split_golden_arch_mask)
-
-    # BT_local_mean = BT_local_mean[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] # Filter out the land since golden arches works best when only over water
-    # BT_local_SD = BT_local_SD[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] # Filter out the land since golden arches works best when only over water
-
-    # BT_mean_and_SD = np.vstack((BT_local_mean, BT_local_SD)).T
-    # km = KMeans(n_clusters=3)
-    # kmeans_labels = km.fit_predict(BT_mean_and_SD)
-    # plot.scatter_plt(BT_local_mean, BT_local_SD, kmeans_labels, km, "/Users/tschmidt/repos/tgs_honours/output/arch_" + str(i) + ".png")
-
-    # cluster_means = km.cluster_centers_[:, 0]
-    # golden_arch_mask_ocean = kmeans_labels == np.nanargmax(cluster_means) # TODO: Is this syntax wrong???
-    # golden_arch_mask = np.zeros(var.shape, dtype=bool)
-    # golden_arch_mask[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] = golden_arch_mask_ocean
+    # plot.scatter_plt_no_cluster(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
 
     var = np.where(golden_arch_mask, np.nan, var)
-    #####################################################################
+    ###############################################################################################
 
     #Filter out the cold high altitude clouds
     var = np.where(high_cloud_mask, np.nan, var)
 
     ##### TESTING #####################
-    # Make a copy of our var before canny is applied
+    # Make a copy of our var before canny is applied (BTD_complete is for the trackers)
     BTD_complete = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
     min_BTD = np.nanmin(BTD_complete)
     if min_BTD < 0:
@@ -312,7 +310,7 @@ for ds_name_7 in data_list_7:
     # Make Canny # TODO: Try adding more edges again?
     # 0.8, 3, 7 worked for hard case!!!!!!
     # var = feature.canny(var, sigma = 3.0, low_threshold = 0, high_threshold = 1) # Was 0.3, 3, 10 #But maybe try HT set to 8?
-    var = feature.canny(var, sigma = 0.8, low_threshold = 3, high_threshold = 7)
+    var = feature.canny(var, sigma = 2.8, low_threshold = 0, high_threshold = 1.5)
     var = np.where(var == np.nan, 0, var)
 
     ## Skimage hough line transform #################################
@@ -321,15 +319,15 @@ for ds_name_7 in data_list_7:
 
     # Was 0, 30, 1
     threshold = 0
-    minLineLength = 16
-    maxLineGap = 1
+    minLineLength = 30
+    maxLineGap = 6
     theta = np.linspace(-np.pi, np.pi, 1000)
 
     lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
     #############################################################
 
-    #### TRACKER ################# #TODO: Try applying tracker to BTD instead of canny edges
-    trackers.update(img, i)
+    #### TRACKER ################# #TODO: Try applying tracker to BTD_complete instead of canny edges (img)
+    trackers.update(BTD_complete, i)
 
     if lines is not None:
         for line in lines:
@@ -345,7 +343,7 @@ for ds_name_7 in data_list_7:
             max_y = np.maximum(y1,y2)
 
             rect = (min_x-2, min_y-2, max_x-min_x + 4, max_y-min_y + 4) #TODO: Maybe expand the size of the boxes a bit?
-            trackers.add_tracker(img, rect, len(data_list_7))
+            trackers.add_tracker(BTD_complete, rect, len(data_list_7))
     ###############################
 
     # Make line plots
@@ -356,7 +354,16 @@ for ds_name_7 in data_list_7:
             y1 = p0[1]
             x2 = p1[0]
             y2 = p1[1]
-            # cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
+            # cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+
+    ####TEMP######################
+    filename = "early_" + str(i) + "_.png"
+    file_path = os.path.join(OUT_DIR, filename)
+    cv2.imwrite(file_path, BTD_img)
+    filename = "canny_" + str(i) + "_.png"
+    file_path = os.path.join(OUT_DIR, filename)
+    cv2.imwrite(file_path, img)
+    ###############################
     
     image_list.append(BTD_img)
     BTD_list.append(BTD)

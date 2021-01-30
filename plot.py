@@ -38,3 +38,21 @@ def scatter_plt(var1, var2, labels, km, fig, ax, out_file):
     canvas.print_figure(out_file)
 
     plt.cla()
+
+def scatter_plt_no_cluster(var1, var2, fig, ax, out_file):
+    ax.scatter(var1.flatten(), var2.flatten(), s=1)
+    
+    # Save image
+    canvas = FigureCanvas(fig)
+    canvas.print_figure(out_file)
+
+    plt.cla()
+
+def hexbin(var1, var2, fig, ax, out_file):
+    ax.hexbin(var1.flatten(), var2.flatten())
+
+    # Save image
+    canvas = FigureCanvas(fig)
+    canvas.print_figure(out_file)
+
+    plt.cla()
