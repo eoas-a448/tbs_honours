@@ -3,8 +3,7 @@ import plot
 import matplot_consts
 from multi_tracker_improved import MultiTrackerImproved
 
-# import GOES
-from netCDF4 import Dataset
+import GOES
 import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -14,7 +13,6 @@ import matplotlib.ticker as mticker
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import os
-import scipy
 from skimage import feature
 from skimage import filters
 from skimage import morphology
@@ -22,7 +20,6 @@ from skimage import transform
 from skimage.segmentation import active_contour
 from skimage.restoration import denoise_nl_means, estimate_sigma
 from cv2 import cv2
-from PIL import Image
 import copy
 from sklearn.cluster import KMeans
 
@@ -42,7 +39,9 @@ from affine import Affine
 from rasterio import mask
 import geopandas
 
-# from rasterio.transform import from_bounds
+#####TESTING##########
+import time
+###################
 
 class InductiveClusterer(BaseEstimator):
     def __init__(self, clusterer, classifier):
@@ -82,8 +81,8 @@ OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
 # Defines the plot area
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
-HEIGHT = 1924 # These were determined from GOES library slice in old system
-WIDTH = 2682 # TODO: TEST ROBUSTNESS OF THESE
+# HEIGHT = 1924 # These were determined from GOES library slice in old system
+# WIDTH = 2682 # TODO: TEST ROBUSTNESS OF THESE
 
 # Get projection info along with axis and fig objects for matplotlib
 fig, ax, fig2, ax2, MapProj, FieldProj = matplot_consts.main_func()
@@ -106,82 +105,17 @@ if ".DS_Store" in data_list_2:
     data_list_2.remove(".DS_Store") # For mac users
 data_list_2 = sorted(data_list_2)
 
-# Make the projection object for the 500m shortwave band
+# Load ch2 for projection constants
 first_ds_name = data_list_2[0]
 first_ds_path = os.path.join(DATA_DIR_2, first_ds_name)
-first_ds = Dataset(first_ds_path)
-SatHeight = first_ds.variables['goes_imager_projection'].perspective_point_height # TODO: Decide if it is bad that I am reusing these same sat constants throught the bands and day
-SatLon = first_ds.variables['goes_imager_projection'].longitude_of_projection_origin
-SatSweep = first_ds.variables['goes_imager_projection'].sweep_angle_axis
-ch02_goes_proj = Proj(proj='geos', h=SatHeight, lon_0=SatLon, sweep=SatSweep)
+first_ds = GOES.open_dataset(first_ds_path)
+var_ch02, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
+HEIGHT = var_ch02.shape[0]
+WIDTH = var_ch02.shape[1]
 
-# west_bound = first_ds.variables["geospatial_lat_lon_extent"].geospatial_westbound_longitude
-# north_bound = first_ds.variables["geospatial_lat_lon_extent"].geospatial_northbound_latitude
-# east_bound = first_ds.variables["geospatial_lat_lon_extent"].geospatial_eastbound_longitude
-# south_bound = first_ds.variables["geospatial_lat_lon_extent"].geospatial_southbound_latitude
-# old_affine = from_bounds(-5433893.0, -5433893.0, 5433893.0, 5433893.0, first_ds.dimensions["y"].size, first_ds.dimensions["x"].size)
-
-# # X = first_ds.variables['x'][:]
-# # Y = first_ds.variables['y'][:]
-# # # width = len(X) #TODO USE NETcdf's dimensions instead and don't use whole x,y
-# # # height = len(Y)
-# # ll_x = X[0] #TODO TEST THIS
-# # ur_y = Y[0]
-# # ur_x = X[-1]
-# # ll_y = Y[-1]
-
-# # ul_x = ll_x # Why these?
-# # ul_y = ur_y
-# # pixel_size_x = first_ds.variables['x'].scale_factor
-# # pixel_size_y = first_ds.variables['y'].scale_factor
-# # old_affine = Affine(pixel_size_x, 0.0, ul_x, 0.0, pixel_size_y, ul_y)
-# # ul_x, ul_y = ch02_goes_proj(LLLon, URLat)
-# # lr_x, lr_y = ch02_goes_proj(URLon, LLLat)
-# # ul_x, ul_y, lr_x, lr_y = ul_x/SatHeight, ul_y/SatHeight, lr_x/SatHeight, lr_y/SatHeight
-# # print(ul_x)
-# # print(ul_y)
-# # print(lr_x)
-# # print(lr_y)
-
-# ll_x, ll_y = ch02_goes_proj(LLLon, LLLat)
-# ur_x, ur_y = ch02_goes_proj(URLon, URLat)
-
-# # ul_col, ul_row = ~old_affine * (URLon, URLat)
-# # lr_col, lr_row = ~old_affine * (LLLon, LLLat)
-
-# ul_col, ul_row = ~old_affine * (ll_x, ll_y)
-# lr_col, lr_row = ~old_affine * (ur_x, ur_y)
-
-# ul_col_hr, ul_row_hr = int(ul_col), int(ul_row)
-# lr_col_hr, lr_row_hr = int(lr_col), int(lr_row)
-
-# print(ul_col_hr)
-# print(ul_row_hr)
-# print(lr_col_hr)
-# print(lr_row_hr)
-
-# col_slice = slice(ul_col_hr, lr_col_hr)
-# row_slice = slice(ul_row_hr, lr_row_hr)
-# derp = first_ds.variables["Rad"][row_slice, col_slice]
-# print(derp.shape)
-
-# # X = first_ds.variables['x']
-# # Y = first_ds.variables['y']
-# # X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
-# # lons, lats = ch02_goes_proj(X, Y, inverse=True)
-# # hey1 = lons[np.where(np.logical_not(np.isinf(lons)))]
-# # hey2 = lats[np.where(np.logical_not(np.isinf(lats)))]
-# # print(lons[np.where(lats == -81.27717590964336)])
-# # print(hey2)
-# # print(hey2[-1])
-# # lons = None # Free the memory from these big datasets
-# # lats = None
-# # X = None
-# # Y = None
-# # first_ds = None
-
-# Setup additional projection constants used throughout the script.
-# TODO: When using the new latlon mesh pyproj system make sure it can handle missing values such as -999.99
+# Setup projection constants used throughout the script.
+# TODO: When using the new GOES slicing system make sure it can handle missing values such as -999.99
 # var_ch07 = np.where(lons==-999.99, np.nan, var_ch07) # THIS IS OLD WAY OF DOING THIS ^^^^^^^
 tiff_path = os.path.join(TIFF_DIR, "0.tif")
 p_crs = CRS.from_epsg(3857)
@@ -202,54 +136,14 @@ area_def = AreaDefinition(area_id, description, proj_id, p_crs,
                             WIDTH, HEIGHT, area_extent)
 fill_value = np.nan
 
-# Make the projection object for the 2km longwave bands (Maybe make seperate for ch7 + ch14?)
+# Load ch7 for land masking
 first_ds_name = data_list_7[0]
 first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
-first_ds = Dataset(first_ds_path)
-ch07_goes_proj = Proj(proj='geos', h=SatHeight, lon_0=SatLon, sweep=SatSweep)
-# X = first_ds.variables['x']*SatHeight
-# Y = first_ds.variables['y']*SatHeight
-# width = len(X) #TODO USE NETcdf's dimensions instead and don't use whole x,y
-# height = len(Y)
-# ll_x = X[0] #TODO TEST THIS
-# ur_y = Y[0]
-# ur_x = X[-1]
-# ll_y = Y[-1]
-
-# print(np.min(X))
-# print(np.max(X))
-# print(np.min(Y))
-# print(np.max(Y))
-
-# ul_x = ll_x # Why these?
-# ul_y = ur_y
-# pixel_size_x = (ur_x - ll_x)/(width - 1)
-# pixel_size_y = (ur_y - ll_y)/(height - 1)
-# old_affine = Affine(pixel_size_x, 0.0, ul_x, 0.0, -pixel_size_y, ul_y)
-# ul_x, ul_y = ch07_goes_proj(LLLon, URLat)
-# lr_x, lr_y = ch07_goes_proj(URLon, LLLat)
-# ul_col, ul_row = ~old_affine * (ul_x, ul_y)
-# lr_col, lr_row = ~old_affine * (lr_x, lr_y)
-
-# ul_col, ul_row = int(ul_col), int(ul_row)
-# lr_col, lr_row = int(lr_col), int(lr_row)
-
-# Load ch7 for land masking
-X = first_ds.variables['x']
-Y = first_ds.variables['y']
-var_ch07 = first_ds.variables["Rad"][:]
-X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
-lons, lats = ch07_goes_proj(X, Y, inverse=True)
+first_ds = GOES.open_dataset(first_ds_path)
+var_ch07, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
 swath_def = SwathDefinition(lons, lats)
-# hey1 = lons[np.where(np.logical_not(np.isinf(lons)))]
-# hey2 = lats[np.where(np.logical_not(np.isinf(lats)))]
-# print(hey1)
-# print(hey2)
-lons = None # Free the memory from these big datasets
-lats = None
-X = None
-Y = None
-first_ds = None
+first_ds = None # Free the memory from these big datasets
 var_ch07 = kd_tree.resample_nearest(
     swath_def,
     var_ch07.ravel(),
@@ -258,7 +152,6 @@ var_ch07 = kd_tree.resample_nearest(
      nprocs=2,
     fill_value=fill_value
 )
-swath_def = None # Free the swath_def memory before the coastline interpolation
 
 ###### New land masking system #######################
 with rasterio.open(
@@ -274,7 +167,6 @@ with rasterio.open(
     nodata=fill_value,
 ) as dst:
     dst.write(np.reshape(var_ch07,(1,HEIGHT,WIDTH)))
-var_ch07 = None # Free memory
 
 src = rasterio.open(tiff_path, mode='r+')
 geodf = geopandas.read_file(LAND_POLYGON_SHAPE)
@@ -302,19 +194,15 @@ for ds_name_7 in data_list_7:
     ds_path_14 = os.path.join(DATA_DIR_14, ds_name_14)
     ds_path_2 = os.path.join(DATA_DIR_2, ds_name_2)
     
+    #######TESTING########
+    start = time.time()
+    #####################
+
     # Load channel 2
-    ds_2 = Dataset(ds_path_2)
-    var_ch02 = ds_2.variables["Rad"][:]
-    X = ds_2.variables['x']
-    Y = ds_2.variables['y']
-    ds_2 = None
-    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
-    lons, lats = ch02_goes_proj(X, Y, inverse=True)
-    X = None
-    Y = None
+    ds_2 = GOES.open_dataset(ds_path_2)
+    var_ch02, lons, lats = ds_2.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
-    lons = None
-    lats = None
     var_ch02 = kd_tree.resample_nearest(
         swath_def,
         var_ch02.ravel(),
@@ -323,22 +211,12 @@ for ds_name_7 in data_list_7:
         nprocs=2,
         fill_value=fill_value
     )
-    swath_def = None
-    ds_2 = None
 
     # Load channel 7
-    ds_7 = Dataset(ds_path_7)
-    var_ch07 = ds_7.variables["Rad"][:]
-    X = ds_7.variables['x']
-    Y = ds_7.variables['y']
-    ds_7 = None
-    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
-    lons, lats = ch07_goes_proj(X, Y, inverse=True)
-    X = None
-    Y = None
+    ds_7 = GOES.open_dataset(ds_path_7)
+    var_ch07, lons, lats = ds_7.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
-    lons = None
-    lats = None
     var_ch07 = kd_tree.resample_nearest(
         swath_def,
         var_ch07.ravel(),
@@ -347,22 +225,12 @@ for ds_name_7 in data_list_7:
         nprocs=2,
         fill_value=fill_value
     )
-    swath_def = None
-    ds_7 = None
 
     # Load channel 14
-    ds_14 = Dataset(ds_path_14)
-    var_ch14 = ds_14.variables["Rad"][:]
-    X = ds_14.variables['x']
-    Y = ds_14.variables['y']
-    ds_14 = None
-    X, Y = np.meshgrid(X*SatHeight, Y*SatHeight)
-    lons, lats = ch07_goes_proj(X, Y, inverse=True)
-    X = None
-    Y = None
+    ds_14 = GOES.open_dataset(ds_path_14)
+    var_ch14, lons, lats = ds_14.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch14, lons, lats = var_ch14.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
-    lons = None
-    lats = None
     var_ch14 = kd_tree.resample_nearest(
         swath_def,
         var_ch14.ravel(),
@@ -371,8 +239,10 @@ for ds_name_7 in data_list_7:
         nprocs=2,
         fill_value=fill_value
     )
-    swath_def = None
-    ds_14 = None
+
+    #######TESTING########
+    print(time.time()-start)
+    #####################
 
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
@@ -428,8 +298,8 @@ for ds_name_7 in data_list_7:
     golden_arch_mask = np.zeros(var.shape, dtype=bool)
     golden_arch_mask[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] = golden_arch_mask_ocean
 
-    plot.scatter_plt(BT, var_ch02, kmeans_labels, km, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
-    plot.hexbin(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
+    # plot.scatter_plt(BT, var_ch02, kmeans_labels, km, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
+    # plot.hexbin(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
 
     var = np.where(golden_arch_mask, np.nan, var)
     ###############################################################################################
@@ -496,16 +366,16 @@ for ds_name_7 in data_list_7:
             y1 = p0[1]
             x2 = p1[0]
             y2 = p1[1]
-            # cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+            cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
 
     ####TEMP######################
     filename = "early_" + str(i) + "_.png"
     file_path = os.path.join(OUT_DIR, filename)
-    labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
-    labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
-    labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
-    labels[:,:,2] = labels_slice
-    BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
+    # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
+    # labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
+    # labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
+    # labels[:,:,2] = labels_slice
+    # BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
     cv2.imwrite(file_path, BTD_img)
     filename = "canny_" + str(i) + "_.png"
     file_path = os.path.join(OUT_DIR, filename)
@@ -541,13 +411,13 @@ for i in range(len(data_list_7)):
             labels_slice = np.where(box_slice >= np.nanmax(box_slice)-2, 255.0, labels_slice)
             labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
 
-            # cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255.0, 0, 0), 2)
 
     ####TESTING######
-    labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
-    labels_slice = np.where(golden_arch_list[i], 255.0, labels_slice)
-    # labels_slice = np.where(high_cloud_list[i], 255.0, labels_slice)
-    labels[:,:,2] = labels_slice
+    # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
+    # labels_slice = np.where(golden_arch_list[i], 255.0, labels_slice)
+    # # labels_slice = np.where(high_cloud_list[i], 255.0, labels_slice)
+    # labels[:,:,2] = labels_slice
     ################
 
     BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)

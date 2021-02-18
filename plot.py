@@ -17,7 +17,7 @@ CMAP = "Greys"
 # VMAX = 30
 VMIN = 0 #These are for radiances
 VMAX = 130
-CLUSTER_COLORS = ['r', 'g', 'b']
+CLUSTER_COLORS = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
 
 def main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, out_file):
 
@@ -31,7 +31,7 @@ def main_func(var, loncor, latcor, fig, ax, MapProj, FieldProj, out_file):
 def scatter_plt(var1, var2, labels, km, fig, ax, out_file):
     label_color = [CLUSTER_COLORS[l] for l in labels]
     ax.scatter(var1.flatten(), var2.flatten(), c=label_color, s=1)
-    ax.scatter(km.cluster_centers_[:, 0], km.cluster_centers_[:, 1], marker='*')
+    # ax.scatter(km.cluster_centers_[:, 0], km.cluster_centers_[:, 1], marker='*')
     
     # Save image
     canvas = FigureCanvas(fig)
