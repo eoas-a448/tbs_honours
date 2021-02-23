@@ -1,5 +1,17 @@
 import numpy as np
 
+def do_boxes_intersect(box1, box2):
+    (x1, y1, w1, h1) = [int(v) for v in box1]
+    (x2, y2, w2, h2) = [int(v) for v in box2]
+
+    if(x1 >= (x2+w2) or x2 >= (x1+w1)): 
+        return False
+
+    if((y1+h1) <= y2 or (y2+h2) <= y1): 
+        return False
+  
+    return True
+
 class MultiTrackerImproved:
     def __init__(self, tracker_type):
         self.trackers = []
@@ -22,7 +34,7 @@ class MultiTrackerImproved:
             if success:
                 self.number_of_successes[i] = self.number_of_successes[i] + 1
                 self.all_boxes[pos][current_time_index] = box
-                if self.number_of_successes[i] >= 2:
+                if self.number_of_successes[i] >= 4:
                     self.confirmed_exhaust[pos] = True
             else:
                 trackers_to_delete.append(i)
@@ -60,10 +72,21 @@ class MultiTrackerImproved:
     # Do this with numpy instead??
     def get_boxes(self, current_time_index):
         boxes = []
+        boxes_final = []
 
         for i in range(len(self.all_boxes)):
             if self.confirmed_exhaust[i]:
                 if self.all_boxes[i][current_time_index] is not None:
                     boxes.append(self.all_boxes[i][current_time_index])
 
-        return boxes
+        ##### System for checking if boxes overlap ########
+        for box in boxes:
+            for other_box in boxes:
+                if box == other_box:
+                    continue
+                if do_boxes_intersect(box, other_box):
+                    boxes_final.append(box)
+                    break
+        ###################################################
+
+        return boxes_final

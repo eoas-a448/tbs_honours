@@ -24,11 +24,11 @@ import copy
 from sklearn.cluster import KMeans
 
 # New clustering method
-from sklearn.cluster import OPTICS
 from sklearn.model_selection import train_test_split
 from sklearn.utils.metaestimators import if_delegate_has_method
 from sklearn.base import BaseEstimator, clone
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.cluster import DBSCAN
 
 # Land masking system
 import rasterio
@@ -39,10 +39,6 @@ from affine import Affine
 from rasterio import mask
 import geopandas
 
-#####TESTING##########
-import time
-###################
-
 class InductiveClusterer(BaseEstimator):
     def __init__(self, clusterer, classifier):
         self.clusterer = clusterer
@@ -52,7 +48,6 @@ class InductiveClusterer(BaseEstimator):
         self.clusterer_ = clone(self.clusterer)
         self.classifier_ = clone(self.classifier)
         y = self.clusterer_.fit_predict(X)
-        print(np.unique(y)) #### TEMP ######
         self.classifier_.fit(X, y)
         return self
 
@@ -70,9 +65,14 @@ class InductiveClusterer(BaseEstimator):
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-aug08-SHORT/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch14-aug08-SHORT/"
 # DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch2-aug08-SHORT/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24-SHORT/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24-SHORT/"
-DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24-SHORT/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24-SHORT/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24-SHORT/"
+# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24-SHORT/"
+# DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-apr24-SHORT/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
+DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
+DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-apr24/"
 
 
 TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
@@ -105,9 +105,15 @@ if ".DS_Store" in data_list_2:
     data_list_2.remove(".DS_Store") # For mac users
 data_list_2 = sorted(data_list_2)
 
-# Load ch2 for projection constants
-first_ds_name = data_list_2[0]
-first_ds_path = os.path.join(DATA_DIR_2, first_ds_name)
+# Get contents of data dir for ch 6
+data_list_6 = os.listdir(DATA_DIR_6)
+if ".DS_Store" in data_list_6:
+    data_list_6.remove(".DS_Store") # For mac users
+data_list_6 = sorted(data_list_6)
+
+# Load ch7 for projection constants
+first_ds_name = data_list_7[0]
+first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
 first_ds = GOES.open_dataset(first_ds_path)
 var_ch02, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
 var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
@@ -183,6 +189,8 @@ trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
 image_list = []
 BTD_list = []
+refl_ch2_list = []
+refl_ch6_list = []
 golden_arch_list = [] #TODO: Both of these next two are temp!!!
 high_cloud_list = []
 
@@ -190,13 +198,11 @@ i = 0
 for ds_name_7 in data_list_7:
     ds_name_14 = data_list_14[i]
     ds_name_2 = data_list_2[i]
+    ds_name_6 = data_list_6[i]
     ds_path_7 = os.path.join(DATA_DIR_7, ds_name_7)
     ds_path_14 = os.path.join(DATA_DIR_14, ds_name_14)
     ds_path_2 = os.path.join(DATA_DIR_2, ds_name_2)
-    
-    #######TESTING########
-    start = time.time()
-    #####################
+    ds_path_6 = os.path.join(DATA_DIR_6, ds_name_6)
 
     # Load channel 2
     ds_2 = GOES.open_dataset(ds_path_2)
@@ -206,6 +212,34 @@ for ds_name_7 in data_list_7:
     var_ch02 = kd_tree.resample_nearest(
         swath_def,
         var_ch02.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
+
+    # # Load channel 2 reflectivity
+    # ds_2 = GOES.open_dataset(ds_path_2)
+    # refl_var_ch02, lons, lats = ds_2.get_imagery("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+    # refl_var_ch02 = refl_var_ch02.refl_fact_to_refl(lons, lats).data
+    # swath_def = SwathDefinition(lons.data, lats.data)
+    # refl_var_ch02 = kd_tree.resample_nearest(
+    #     swath_def,
+    #     refl_var_ch02.ravel(),
+    #     area_def,
+    #     radius_of_influence=5000,
+    #     nprocs=2,
+    #     fill_value=fill_value
+    # )
+
+    # Load channel 6 reflectivity
+    ds_6 = GOES.open_dataset(ds_path_6)
+    refl_var_ch06, lons, lats = ds_6.get_imagery("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+    refl_var_ch06 = refl_var_ch06.refl_fact_to_refl(lons, lats).data
+    swath_def = SwathDefinition(lons.data, lats.data)
+    refl_var_ch06 = kd_tree.resample_nearest(
+        swath_def,
+        refl_var_ch06.ravel(),
         area_def,
         radius_of_influence=5000,
         nprocs=2,
@@ -240,12 +274,13 @@ for ds_name_7 in data_list_7:
         fill_value=fill_value
     )
 
-    #######TESTING########
-    print(time.time()-start)
-    #####################
-
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
+
+    # Skip day if it has bad data
+    if np.isnan(var).any():
+        i = i + 1
+        continue
 
     # Make copy of the BTD for use as a backround in cv2 image output
     # Maps the BTD values to a range of [0,255]
@@ -257,6 +292,8 @@ for ds_name_7 in data_list_7:
     max_BTD = np.nanmax(BTD_img)
     BTD_img = BTD_img/max_BTD
     BTD_img = cv2.cvtColor(BTD_img*255, cv2.COLOR_GRAY2BGR)
+    BTD_img_trackers = copy.deepcopy(BTD_img) # Next two lines are for new BTD data for trackers
+    BTD_img_trackers = np.array(BTD_img_trackers).astype('uint8') # Since it seems the trackers need images of type uint8
 
     # Filter out the land
     var[land_masking] = np.nan
@@ -271,33 +308,36 @@ for ds_name_7 in data_list_7:
     var_ch02 = var_ch02[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] # Filter out the land since golden arches works best when only over water
 
     BT_and_CH02 = np.vstack((BT, var_ch02)).T
-    # BT_and_CH02_sample, _ = train_test_split(BT_and_CH02, train_size=10000)
+    BT_and_CH02_sample, _ = train_test_split(BT_and_CH02, train_size=10000)
 
-    # start = time.time() ###TESTING#####
-    # clusterer = OPTICS(min_cluster_size=0.1, xi=0.001)
-    # classifier = KNeighborsClassifier()
-    # inductive_cluster = InductiveClusterer(clusterer, classifier).fit(BT_and_CH02_sample)
-    km = KMeans(n_clusters=5)
-    kmeans_labels = km.fit_predict(BT_and_CH02)
-    # kmeans_labels = inductive_cluster.predict(BT_and_CH02) + 1
-    # print("TIME: " + str(time.time()-start))
+    ######DELETE########
+    # clusterer = OPTICS(min_cluster_size=0.1, xi=0.035)#, cluster_method="dbscan", max_eps=8)
+    ###################
+    clusterer = DBSCAN(eps=1.5, min_samples=100)
+    classifier = DecisionTreeClassifier()
+    inductive_cluster = InductiveClusterer(clusterer, classifier).fit(BT_and_CH02_sample)
+    kmeans_labels = inductive_cluster.predict(BT_and_CH02) + 1
 
-    cluster_means = km.cluster_centers_[:, 1]
-    golden_arch_mask_ocean = kmeans_labels == np.nanargmin(cluster_means)
-    # all_labels = np.unique(kmeans_labels)
-    # min_refl = np.Inf
-    # open_ocean_label = 0
-    # for j in all_labels:
-    #     labeled_refl_array = var_ch02[kmeans_labels==j]
-    #     mean_refl = np.nanmean(labeled_refl_array)
-    #     if mean_refl < min_refl:
-    #         open_ocean_label = j
-    #         min_refl = mean_refl
-    # golden_arch_mask_ocean = kmeans_labels == open_ocean_label
+    # km = KMeans(n_clusters=3)
+    # kmeans_labels = km.fit_predict(BT_and_CH02)
+    # cluster_means = km.cluster_centers_[:, 1]
+    # golden_arch_mask_ocean = kmeans_labels == np.nanargmin(cluster_means)
+    
+    all_labels = np.unique(kmeans_labels)
+    min_refl = np.Inf
+    open_ocean_label = 0
+    for j in all_labels:
+        labeled_refl_array = var_ch02[kmeans_labels==j]
+        mean_refl = np.nanmean(labeled_refl_array)
+        if mean_refl < min_refl:
+            open_ocean_label = j
+            min_refl = mean_refl
+    golden_arch_mask_ocean = kmeans_labels == open_ocean_label
 
     golden_arch_mask = np.zeros(var.shape, dtype=bool)
     golden_arch_mask[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] = golden_arch_mask_ocean
 
+    km = "test" ####TEMP
     # plot.scatter_plt(BT, var_ch02, kmeans_labels, km, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
     # plot.hexbin(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
 
@@ -307,22 +347,23 @@ for ds_name_7 in data_list_7:
     #Filter out the cold high altitude clouds
     var = np.where(high_cloud_mask, np.nan, var)
 
-    ##### TESTING #####################
-    # Make a copy of our var before canny is applied (BTD_complete is for the trackers)
-    BTD_complete = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
-    min_BTD = np.nanmin(BTD_complete)
-    if min_BTD < 0:
-        BTD_complete = BTD_complete + np.abs(min_BTD)
-    max_BTD = np.nanmax(BTD_complete)
-    BTD_complete = BTD_complete/max_BTD
-    BTD_complete = cv2.cvtColor(BTD_complete*255, cv2.COLOR_GRAY2BGR)
-    BTD_complete = np.array(BTD_complete).astype('uint8') # Since it seems the trackers need images of type uint8
-    #################################
+    # ##### TESTING #####################
+    # # Make a copy of our var before canny is applied (BTD_complete is for the trackers)
+    # BTD_complete = copy.deepcopy(var) #TODO: Is the deepcopy unnecessary?
+    # min_BTD = np.nanmin(BTD_complete)
+    # if min_BTD < 0:
+    #     BTD_complete = BTD_complete + np.abs(min_BTD)
+    # max_BTD = np.nanmax(BTD_complete)
+    # BTD_complete = BTD_complete/max_BTD
+    # BTD_complete = cv2.cvtColor(BTD_complete*255, cv2.COLOR_GRAY2BGR)
+    # BTD_complete = np.array(BTD_complete).astype('uint8') # Since it seems the trackers need images of type uint8
+    # #################################
 
     # Make Canny # TODO: Try adding more edges again?
     # 0.8, 3, 7 worked for hard case!!!!!!
     # var = feature.canny(var, sigma = 3.0, low_threshold = 0, high_threshold = 1) # Was 0.3, 3, 10 #But maybe try HT set to 8?
-    var = feature.canny(var, sigma = 2.8, low_threshold = 0, high_threshold = 1.5)
+    # var = feature.canny(var, sigma = 2.7, low_threshold = 0, high_threshold = 1.2)
+    var = feature.canny(var, sigma = 3.4, low_threshold = 0, high_threshold = 1.2)
     var = np.where(var == np.nan, 0, var)
 
     ## Skimage hough line transform #################################
@@ -332,14 +373,14 @@ for ds_name_7 in data_list_7:
     # Was 0, 30, 1
     threshold = 0
     minLineLength = 30
-    maxLineGap = 6
+    maxLineGap = 2
     theta = np.linspace(-np.pi, np.pi, 1000)
 
     lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
     #############################################################
 
     #### TRACKER ################# #TODO: Try applying tracker to BTD_complete instead of canny edges (img)
-    trackers.update(BTD_complete, i)
+    trackers.update(img, i)
 
     if lines is not None:
         for line in lines:
@@ -355,7 +396,7 @@ for ds_name_7 in data_list_7:
             max_y = np.maximum(y1,y2)
 
             rect = (min_x-2, min_y-2, max_x-min_x + 4, max_y-min_y + 4) #TODO: Maybe expand the size of the boxes a bit?
-            trackers.add_tracker(BTD_complete, rect, len(data_list_7))
+            trackers.add_tracker(img, rect, len(data_list_7))
     ###############################
 
     # Make line plots
@@ -366,17 +407,17 @@ for ds_name_7 in data_list_7:
             y1 = p0[1]
             x2 = p1[0]
             y2 = p1[1]
-            cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
+            # cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
 
     ####TEMP######################
-    filename = "early_" + str(i) + "_.png"
-    file_path = os.path.join(OUT_DIR, filename)
+    # filename = "early_" + str(i) + "_.png"
+    # file_path = os.path.join(OUT_DIR, filename)
     # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
     # labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
     # labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
     # labels[:,:,2] = labels_slice
     # BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
-    cv2.imwrite(file_path, BTD_img)
+    # cv2.imwrite(file_path, BTD_img)
     filename = "canny_" + str(i) + "_.png"
     file_path = os.path.join(OUT_DIR, filename)
     cv2.imwrite(file_path, img)
@@ -384,32 +425,74 @@ for ds_name_7 in data_list_7:
     
     image_list.append(BTD_img)
     BTD_list.append(BTD)
-    golden_arch_list.append(golden_arch_mask)
+    # refl_ch2_list.append(refl_var_ch02)
+    refl_ch6_list.append(refl_var_ch06)
+    golden_arch_list.append(golden_arch_mask) # NEXT 2 ARE TEMP
     high_cloud_list.append(high_cloud_mask)
 
     print("Image " + str(i) + " Calculated")
     i = i + 1
 
 
-for i in range(len(data_list_7)):
+# TODO: Remove BTD_list in all areas if I am not using it for real final pngs
+for i in range(len(BTD_list)):
     filename = str(i) + ".png"
     file_path = os.path.join(OUT_DIR, filename)
     boxes = trackers.get_boxes(i)
 
     BTD_img = image_list[i]
     BTD = BTD_list[i]
+    # refl_var_ch02 = refl_ch2_list[i]
+    refl_var_ch06 = refl_ch6_list[i]
 
     # Make box plots for trackers
     # Also make and highlight the labels
     labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
+    # j = 0 #TEMP######
     for box in boxes:
         (x, y, w, h) = [int(v) for v in box]
 
         if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD.shape[0] and x+w <= BTD.shape[1] and y < BTD.shape[0] and x < BTD.shape[1]:
-            box_slice = BTD[y:y+h, x:x+w]
+            # box_slice = BTD[y:y+h, x:x+w]
+            # ch2_slice = refl_var_ch02[y:y+h, x:x+w]
+            ch6_slice = refl_var_ch06[y:y+h, x:x+w]
+            # ch2_and_ch6 = np.vstack((ch2_slice.flatten(), ch6_slice.flatten())).T
+
+            ## inductive #########################################################################
+            # clusterer = DBSCAN(eps=1.5, min_samples=25)
+            # classifier = DecisionTreeClassifier()
+            # inductive_cluster = InductiveClusterer(clusterer, classifier).fit(ch2_and_ch6)
+            # kmeans_labels = inductive_cluster.predict(ch2_and_ch6) + 1
+
+            # all_labels = np.unique(kmeans_labels)
+            # max_refl = 0
+            # track_label = 0
+            # for k in all_labels:
+            #     labeled_refl_array = ch6_slice.flatten()[kmeans_labels==k]
+            #     mean_refl = np.nanmean(labeled_refl_array)
+            #     if mean_refl > max_refl:
+            #         track_label = k
+            #         max_refl = mean_refl
+            ######################################################################################
+
+            ## Kmeans ####################################
+            # km = KMeans(n_clusters=2)
+            # kmeans_labels = km.fit_predict(ch2_and_ch6)
+            # cluster_means = km.cluster_centers_[:, 1]
+            #############################################
+
             labels_slice = labels[y:y+h, x:x+w, 2]
-            labels_slice = np.where(box_slice >= np.nanmax(box_slice)-2, 255.0, labels_slice)
+            labels_slice = np.where(ch6_slice >= 0.33, 255.0, labels_slice)
+            # labels_slice = np.where(kmeans_labels.reshape(labels_slice.shape) == np.nanargmax(cluster_means), 255.0, labels_slice) #kmeans
+            # labels_slice = np.where(kmeans_labels.reshape(labels_slice.shape) == track_label, 255.0, labels_slice) #inductive
             labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
+
+            ###### TESTING ###################
+            # filename2 = "BOX_" + str(j) + "_.png"
+            # file_path2 = os.path.join(OUT_DIR, filename2)
+            # plot.scatter_plt(ch2_slice,ch6_slice,kmeans_labels,km,fig2,ax2,file_path2)
+            # j = j + 1
+            ##################################
 
             cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255.0, 0, 0), 2)
 
