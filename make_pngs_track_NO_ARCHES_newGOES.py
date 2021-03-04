@@ -115,7 +115,7 @@ data_list_6 = sorted(data_list_6)
 first_ds_name = data_list_7[0]
 first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
 first_ds = GOES.open_dataset(first_ds_path)
-var_ch02, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+var_ch02, lons, lats = first_ds.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
 var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
 HEIGHT = var_ch02.shape[0]
 WIDTH = var_ch02.shape[1]
@@ -146,7 +146,7 @@ fill_value = np.nan
 first_ds_name = data_list_7[0]
 first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
 first_ds = GOES.open_dataset(first_ds_path)
-var_ch07, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+var_ch07, lons, lats = first_ds.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
 var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
 swath_def = SwathDefinition(lons, lats)
 first_ds = None # Free the memory from these big datasets
@@ -206,7 +206,7 @@ for ds_name_7 in data_list_7:
 
     # Load channel 2
     ds_2 = GOES.open_dataset(ds_path_2)
-    var_ch02, lons, lats = ds_2.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch02, lons, lats = ds_2.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
     var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
     var_ch02 = kd_tree.resample_nearest(
@@ -218,23 +218,23 @@ for ds_name_7 in data_list_7:
         fill_value=fill_value
     )
 
-    # # Load channel 2 reflectivity
-    # ds_2 = GOES.open_dataset(ds_path_2)
-    # refl_var_ch02, lons, lats = ds_2.get_imagery("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
-    # refl_var_ch02 = refl_var_ch02.refl_fact_to_refl(lons, lats).data
-    # swath_def = SwathDefinition(lons.data, lats.data)
-    # refl_var_ch02 = kd_tree.resample_nearest(
-    #     swath_def,
-    #     refl_var_ch02.ravel(),
-    #     area_def,
-    #     radius_of_influence=5000,
-    #     nprocs=2,
-    #     fill_value=fill_value
-    # )
+    # Load channel 2 reflectivity
+    ds_2 = GOES.open_dataset(ds_path_2)
+    refl_var_ch02, lons, lats = ds_2.image("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+    refl_var_ch02 = refl_var_ch02.refl_fact_to_refl(lons, lats).data
+    swath_def = SwathDefinition(lons.data, lats.data)
+    refl_var_ch02 = kd_tree.resample_nearest(
+        swath_def,
+        refl_var_ch02.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
 
     # Load channel 6 reflectivity
     ds_6 = GOES.open_dataset(ds_path_6)
-    refl_var_ch06, lons, lats = ds_6.get_imagery("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+    refl_var_ch06, lons, lats = ds_6.image("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
     refl_var_ch06 = refl_var_ch06.refl_fact_to_refl(lons, lats).data
     swath_def = SwathDefinition(lons.data, lats.data)
     refl_var_ch06 = kd_tree.resample_nearest(
@@ -248,7 +248,7 @@ for ds_name_7 in data_list_7:
 
     # Load channel 7
     ds_7 = GOES.open_dataset(ds_path_7)
-    var_ch07, lons, lats = ds_7.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch07, lons, lats = ds_7.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
     var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
     var_ch07 = kd_tree.resample_nearest(
@@ -262,7 +262,7 @@ for ds_name_7 in data_list_7:
 
     # Load channel 14
     ds_14 = GOES.open_dataset(ds_path_14)
-    var_ch14, lons, lats = ds_14.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch14, lons, lats = ds_14.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
     var_ch14, lons, lats = var_ch14.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
     var_ch14 = kd_tree.resample_nearest(
@@ -363,7 +363,7 @@ for ds_name_7 in data_list_7:
     # 0.8, 3, 7 worked for hard case!!!!!!
     # var = feature.canny(var, sigma = 3.0, low_threshold = 0, high_threshold = 1) # Was 0.3, 3, 10 #But maybe try HT set to 8?
     # var = feature.canny(var, sigma = 2.7, low_threshold = 0, high_threshold = 1.2)
-    var = feature.canny(var, sigma = 3.4, low_threshold = 0, high_threshold = 1.2)
+    var = feature.canny(var, sigma = 2.2, low_threshold = 0, high_threshold = 1.2)
     var = np.where(var == np.nan, 0, var)
 
     ## Skimage hough line transform #################################
@@ -410,7 +410,7 @@ for ds_name_7 in data_list_7:
             # cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
 
     ####TEMP######################
-    # filename = "early_" + str(i) + "_.png"
+    # filename = "early_" + str(i) + ".png"
     # file_path = os.path.join(OUT_DIR, filename)
     # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
     # labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
@@ -418,14 +418,14 @@ for ds_name_7 in data_list_7:
     # labels[:,:,2] = labels_slice
     # BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
     # cv2.imwrite(file_path, BTD_img)
-    filename = "canny_" + str(i) + "_.png"
+    filename = "canny_" + str(i) + ".png"
     file_path = os.path.join(OUT_DIR, filename)
     cv2.imwrite(file_path, img)
     ###############################
     
     image_list.append(BTD_img)
     BTD_list.append(BTD)
-    # refl_ch2_list.append(refl_var_ch02)
+    refl_ch2_list.append(refl_var_ch02)
     refl_ch6_list.append(refl_var_ch06)
     golden_arch_list.append(golden_arch_mask) # NEXT 2 ARE TEMP
     high_cloud_list.append(high_cloud_mask)
@@ -442,19 +442,19 @@ for i in range(len(BTD_list)):
 
     BTD_img = image_list[i]
     BTD = BTD_list[i]
-    # refl_var_ch02 = refl_ch2_list[i]
+    refl_var_ch02 = refl_ch2_list[i]
     refl_var_ch06 = refl_ch6_list[i]
 
     # Make box plots for trackers
     # Also make and highlight the labels
     labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
-    # j = 0 #TEMP######
+    j = 0 #TEMP######
     for box in boxes:
         (x, y, w, h) = [int(v) for v in box]
 
         if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD.shape[0] and x+w <= BTD.shape[1] and y < BTD.shape[0] and x < BTD.shape[1]:
             # box_slice = BTD[y:y+h, x:x+w]
-            # ch2_slice = refl_var_ch02[y:y+h, x:x+w]
+            ch2_slice = refl_var_ch02[y:y+h, x:x+w]
             ch6_slice = refl_var_ch06[y:y+h, x:x+w]
             # ch2_and_ch6 = np.vstack((ch2_slice.flatten(), ch6_slice.flatten())).T
 
@@ -482,16 +482,16 @@ for i in range(len(BTD_list)):
             #############################################
 
             labels_slice = labels[y:y+h, x:x+w, 2]
-            labels_slice = np.where(ch6_slice >= 0.33, 255.0, labels_slice)
+            labels_slice = np.where(np.logical_and(ch6_slice >= 0.28, ch2_slice >= 0.3), 255.0, labels_slice)
             # labels_slice = np.where(kmeans_labels.reshape(labels_slice.shape) == np.nanargmax(cluster_means), 255.0, labels_slice) #kmeans
             # labels_slice = np.where(kmeans_labels.reshape(labels_slice.shape) == track_label, 255.0, labels_slice) #inductive
             labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
 
             ###### TESTING ###################
-            # filename2 = "BOX_" + str(j) + "_.png"
-            # file_path2 = os.path.join(OUT_DIR, filename2)
-            # plot.scatter_plt(ch2_slice,ch6_slice,kmeans_labels,km,fig2,ax2,file_path2)
-            # j = j + 1
+            filename2 = "BOX_" + str(j) + ".png"
+            file_path2 = os.path.join(OUT_DIR, filename2)
+            plot.scatter_plt_no_cluster(ch2_slice,ch6_slice,fig2,ax2,file_path2)
+            j = j + 1
             ##################################
 
             cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255.0, 0, 0), 2)

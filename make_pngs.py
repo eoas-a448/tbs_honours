@@ -48,8 +48,6 @@ class InductiveClusterer(BaseEstimator):
 
 TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
 LAND_POLYGON_SHAPE = "/Users/tschmidt/repos/tgs_honours/good_data/coastlines_merc/land_polygons.shp"
-OUT_DIR = "/Users/tschmidt/repos/tgs_honours/output/"
-
 # Defines the plot area
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
@@ -88,7 +86,7 @@ def run(input_dir, output_dir):
     first_ds_name = data_list_7[0]
     first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
     first_ds = GOES.open_dataset(first_ds_path)
-    var_ch02, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch02, lons, lats = first_ds.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
     var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
     HEIGHT = var_ch02.shape[0]
     WIDTH = var_ch02.shape[1]
@@ -117,7 +115,7 @@ def run(input_dir, output_dir):
     first_ds_name = data_list_7[0]
     first_ds_path = os.path.join(DATA_DIR_7, first_ds_name)
     first_ds = GOES.open_dataset(first_ds_path)
-    var_ch07, lons, lats = first_ds.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+    var_ch07, lons, lats = first_ds.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
     var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
     swath_def = SwathDefinition(lons, lats)
     first_ds = None # Free the memory from these big datasets
@@ -158,8 +156,9 @@ def run(input_dir, output_dir):
     # Init multi-tracker
     trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
-    image_list = []
+    # image_list = []
     BTD_list = []
+    refl_ch2_list = []
     refl_ch6_list = []
 
     i = 0
@@ -174,7 +173,7 @@ def run(input_dir, output_dir):
 
         # Load channel 2
         ds_2 = GOES.open_dataset(ds_path_2)
-        var_ch02, lons, lats = ds_2.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+        var_ch02, lons, lats = ds_2.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
         var_ch02, lons, lats = var_ch02.data, lons.data, lats.data
         swath_def = SwathDefinition(lons, lats)
         var_ch02 = kd_tree.resample_nearest(
@@ -186,9 +185,23 @@ def run(input_dir, output_dir):
             fill_value=fill_value
         )
 
+        # Load channel 2 reflectivity
+        ds_2 = GOES.open_dataset(ds_path_2)
+        refl_var_ch02, lons, lats = ds_2.image("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+        refl_var_ch02 = refl_var_ch02.refl_fact_to_refl(lons, lats).data
+        swath_def = SwathDefinition(lons.data, lats.data)
+        refl_var_ch02 = kd_tree.resample_nearest(
+            swath_def,
+            refl_var_ch02.ravel(),
+            area_def,
+            radius_of_influence=5000,
+            nprocs=2,
+            fill_value=fill_value
+        )
+
         # Load channel 6 reflectivity
         ds_6 = GOES.open_dataset(ds_path_6)
-        refl_var_ch06, lons, lats = ds_6.get_imagery("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
+        refl_var_ch06, lons, lats = ds_6.image("Rad", up_level=True, domain=[LLLon, URLon, LLLat, URLat])
         refl_var_ch06 = refl_var_ch06.refl_fact_to_refl(lons, lats).data
         swath_def = SwathDefinition(lons.data, lats.data)
         refl_var_ch06 = kd_tree.resample_nearest(
@@ -202,7 +215,7 @@ def run(input_dir, output_dir):
 
         # Load channel 7
         ds_7 = GOES.open_dataset(ds_path_7)
-        var_ch07, lons, lats = ds_7.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+        var_ch07, lons, lats = ds_7.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
         var_ch07, lons, lats = var_ch07.data, lons.data, lats.data
         swath_def = SwathDefinition(lons, lats)
         var_ch07 = kd_tree.resample_nearest(
@@ -216,7 +229,7 @@ def run(input_dir, output_dir):
 
         # Load channel 14
         ds_14 = GOES.open_dataset(ds_path_14)
-        var_ch14, lons, lats = ds_14.get_imagery("Rad", domain=[LLLon, URLon, LLLat, URLat])
+        var_ch14, lons, lats = ds_14.image("Rad", domain=[LLLon, URLon, LLLat, URLat])
         var_ch14, lons, lats = var_ch14.data, lons.data, lats.data
         swath_def = SwathDefinition(lons, lats)
         var_ch14 = kd_tree.resample_nearest(
@@ -239,13 +252,13 @@ def run(input_dir, output_dir):
         # Make copy of the BTD for use as a backround in cv2 image output
         # Maps the BTD values to a range of [0,255]
         BTD = copy.deepcopy(var)
-        BTD_img = copy.deepcopy(var)
-        min_BTD = np.nanmin(BTD_img)
-        if min_BTD < 0:
-            BTD_img = BTD_img + np.abs(min_BTD)
-        max_BTD = np.nanmax(BTD_img)
-        BTD_img = BTD_img/max_BTD
-        BTD_img = cv2.cvtColor(BTD_img*255, cv2.COLOR_GRAY2BGR)
+        # BTD_img = copy.deepcopy(var)
+        # min_BTD = np.nanmin(BTD_img)
+        # if min_BTD < 0:
+        #     BTD_img = BTD_img + np.abs(min_BTD)
+        # max_BTD = np.nanmax(BTD_img)
+        # BTD_img = BTD_img/max_BTD
+        # BTD_img = cv2.cvtColor(BTD_img*255, cv2.COLOR_GRAY2BGR)
         # BTD_img_trackers = copy.deepcopy(BTD_img) # Next two lines are for new BTD data for trackers
         # BTD_img_trackers = np.array(BTD_img_trackers).astype('uint8') # Since it seems the trackers need images of type uint8
 
@@ -289,9 +302,7 @@ def run(input_dir, output_dir):
         #Filter out the cold high altitude clouds
         var = np.where(high_cloud_mask, np.nan, var)
 
-        # Make Canny
-        # 0.8, 3, 7 worked for hard case!!!!!!
-        var = feature.canny(var, sigma = 3.0, low_threshold = 0, high_threshold = 1.2)
+        var = feature.canny(var, sigma = 2.2, low_threshold = 0, high_threshold = 1.2)
         var = np.where(var == np.nan, 0, var)
 
         ## Skimage hough line transform #################################
@@ -327,8 +338,9 @@ def run(input_dir, output_dir):
                 trackers.add_tracker(img, rect, len(data_list_7))
         ###############################
         
-        image_list.append(BTD_img)
+        # image_list.append(BTD_img)
         BTD_list.append(BTD)
+        refl_ch2_list.append(refl_var_ch02)
         refl_ch6_list.append(refl_var_ch06)
 
         print("Image " + str(i) + " Calculated")
@@ -337,31 +349,62 @@ def run(input_dir, output_dir):
 
     # TODO: Remove BTD_list in all areas if I am not using it for real final pngs
     for i in range(len(BTD_list)):
-        filename = str(i) + ".png"
-        file_path = os.path.join(OUT_DIR, filename)
+        label_name = "labels"
+        data_name = "data"
+        filename = str(i) + ".tif"
+        data_file_path = os.path.join(output_dir, data_name, filename)
+        label_file_path = os.path.join(output_dir, label_name, filename)
         boxes = trackers.get_boxes(i)
 
-        BTD_img = image_list[i]
+        # BTD_img = image_list[i]
         BTD = BTD_list[i]
+        refl_var_ch02 = refl_ch2_list[i]
         refl_var_ch06 = refl_ch6_list[i]
 
         # Make box plots for trackers
         # Also make and highlight the labels
-        labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
+        labels = np.zeros([BTD.shape[0], BTD.shape[1]], dtype=np.float32)
         for box in boxes:
             (x, y, w, h) = [int(v) for v in box]
 
             if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD.shape[0] and x+w <= BTD.shape[1] and y < BTD.shape[0] and x < BTD.shape[1]:
+                ch2_slice = refl_var_ch02[y:y+h, x:x+w]
                 ch6_slice = refl_var_ch06[y:y+h, x:x+w]
 
-                labels_slice = labels[y:y+h, x:x+w, 2]
-                labels_slice = np.where(ch6_slice >= 0.25, 255.0, labels_slice)
-                labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
+                labels_slice = labels[y:y+h, x:x+w]
+                labels_slice = np.where(np.logical_and(ch6_slice >= 0.28, ch2_slice >= 0.3), 1.0, labels_slice)
+                labels[y:y+h, x:x+w] = labels_slice # Add red for labels
 
-                cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255.0, 0, 0), 2)
+        with rasterio.open(
+            data_file_path,
+            "w",
+            driver="GTiff",
+            height=HEIGHT,
+            width=WIDTH,
+            count=1, #????
+            dtype=BTD.dtype,
+            crs=p_crs,
+            transform=new_affine,
+            nodata=fill_value,
+        ) as dst:
+            dst.write(np.reshape(BTD,(1,HEIGHT,WIDTH)))
 
-        BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
+        with rasterio.open(
+            label_file_path,
+            "w",
+            driver="GTiff",
+            height=HEIGHT,
+            width=WIDTH,
+            count=1, #????
+            dtype=labels.dtype,
+            crs=p_crs,
+            transform=new_affine,
+            nodata=fill_value,
+        ) as dst:
+            dst.write(np.reshape(labels,(1,HEIGHT,WIDTH)))
 
-        cv2.imwrite(file_path, BTD_img)
+        # BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
+
+        # cv2.imwrite(file_path, BTD_img)
 
         print("Image " + str(i) + " Complete")
