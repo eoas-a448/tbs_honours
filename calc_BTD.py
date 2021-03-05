@@ -1,14 +1,4 @@
-import GOES
-from netCDF4 import Dataset
 import numpy as np
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cf
-from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
-import matplotlib.ticker as mticker
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-import os
 
 def bt_ch07_temp_conv(var):
     fk1 = 2.00774e05
