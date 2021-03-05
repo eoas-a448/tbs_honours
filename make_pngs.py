@@ -156,8 +156,8 @@ def run(input_dir, output_dir):
     # Init multi-tracker
     trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
-    # image_list = []
-    BTD_list = []
+    image_list = []
+    # BTD_list = []
     refl_ch2_list = []
     refl_ch6_list = []
 
@@ -251,13 +251,13 @@ def run(input_dir, output_dir):
 
         # Make copy of the BTD for use as a backround in cv2 image output
         # Maps the BTD values to a range of [0,255]
-        BTD = copy.deepcopy(var)
-        # BTD_img = copy.deepcopy(var)
-        # min_BTD = np.nanmin(BTD_img)
-        # if min_BTD < 0:
-        #     BTD_img = BTD_img + np.abs(min_BTD)
-        # max_BTD = np.nanmax(BTD_img)
-        # BTD_img = BTD_img/max_BTD
+        # BTD = copy.deepcopy(var)
+        BTD_img = copy.deepcopy(var)
+        min_BTD = np.nanmin(BTD_img)
+        if min_BTD < 0:
+            BTD_img = BTD_img + np.abs(min_BTD)
+        max_BTD = np.nanmax(BTD_img)
+        BTD_img = BTD_img/max_BTD
         # BTD_img = cv2.cvtColor(BTD_img*255, cv2.COLOR_GRAY2BGR)
         # BTD_img_trackers = copy.deepcopy(BTD_img) # Next two lines are for new BTD data for trackers
         # BTD_img_trackers = np.array(BTD_img_trackers).astype('uint8') # Since it seems the trackers need images of type uint8
@@ -338,8 +338,8 @@ def run(input_dir, output_dir):
                 trackers.add_tracker(img, rect, len(data_list_7))
         ###############################
         
-        # image_list.append(BTD_img)
-        BTD_list.append(BTD)
+        image_list.append(BTD_img)
+        # BTD_list.append(BTD)
         refl_ch2_list.append(refl_var_ch02)
         refl_ch6_list.append(refl_var_ch06)
 
@@ -348,7 +348,7 @@ def run(input_dir, output_dir):
 
 
     # TODO: Remove BTD_list in all areas if I am not using it for real final pngs
-    for i in range(len(BTD_list)):
+    for i in range(len(image_list)):
         label_name = "labels"
         data_name = "data"
         filename = str(i) + ".tif"
@@ -356,18 +356,18 @@ def run(input_dir, output_dir):
         label_file_path = os.path.join(output_dir, label_name, filename)
         boxes = trackers.get_boxes(i)
 
-        # BTD_img = image_list[i]
-        BTD = BTD_list[i]
+        BTD_img = image_list[i]
+        # BTD = BTD_list[i]
         refl_var_ch02 = refl_ch2_list[i]
         refl_var_ch06 = refl_ch6_list[i]
 
         # Make box plots for trackers
         # Also make and highlight the labels
-        labels = np.zeros([BTD.shape[0], BTD.shape[1]], dtype=np.float32)
+        labels = np.zeros([BTD_img.shape[0], BTD_img.shape[1]], dtype=np.float32)
         for box in boxes:
             (x, y, w, h) = [int(v) for v in box]
 
-            if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD.shape[0] and x+w <= BTD.shape[1] and y < BTD.shape[0] and x < BTD.shape[1]:
+            if w > 0 and h > 0 and x >= 0 and y >= 0 and y+h <= BTD_img.shape[0] and x+w <= BTD_img.shape[1] and y < BTD_img.shape[0] and x < BTD_img.shape[1]:
                 ch2_slice = refl_var_ch02[y:y+h, x:x+w]
                 ch6_slice = refl_var_ch06[y:y+h, x:x+w]
 
@@ -382,12 +382,12 @@ def run(input_dir, output_dir):
             height=HEIGHT,
             width=WIDTH,
             count=1, #????
-            dtype=BTD.dtype,
+            dtype=BTD_img.dtype,
             crs=p_crs,
             transform=new_affine,
             nodata=fill_value,
         ) as dst:
-            dst.write(np.reshape(BTD,(1,HEIGHT,WIDTH)))
+            dst.write(np.reshape(BTD_img,(1,HEIGHT,WIDTH)))
 
         with rasterio.open(
             label_file_path,
