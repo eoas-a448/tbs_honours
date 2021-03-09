@@ -46,8 +46,8 @@ class InductiveClusterer(BaseEstimator):
         return self.classifier_.decision_function(X)
 
 
-TIFF_DIR = "/newtera/tschmidt/tgs_honours_data/coastline_tiff/"
-LAND_POLYGON_SHAPE = "/newtera/tschmidt/tgs_honours_data/coastlines_merc/land_polygons.shp"
+TIFF_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch7-apr24-tiff/"
+LAND_POLYGON_SHAPE = "/Users/tschmidt/repos/tgs_honours/good_data/coastlines_merc/land_polygons.shp"
 # Defines the plot area
 LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
