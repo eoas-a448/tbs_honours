@@ -48,9 +48,51 @@ def scatter_plt_no_cluster(var1, var2, fig, ax, out_file):
 
     plt.cla()
 
+def scatter_plt_no_cluster_log(var1, var2, fig, ax, out_file):
+    ax.scatter(var1.flatten(), var2.flatten(), s=1)
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.set_xlabel("Particle Depth")
+    ax.set_ylabel("Particle Size")
+    # ax.set_xticks(np.arange(min(var1),max(var1), 1))
+    # ax.set_yticks(np.arange(min(var2),max(var2), 1))
+    
+    # Save image
+    canvas = FigureCanvas(fig)
+    canvas.print_figure(out_file)
+
+    plt.cla()
+
 def hexbin(var1, var2, fig, ax, out_file):
     ax.hexbin(var1.flatten(), var2.flatten())
 
+    # Save image
+    canvas = FigureCanvas(fig)
+    canvas.print_figure(out_file)
+
+    plt.cla()
+
+def hexbin_log(var1, var2, fig, ax, out_file):
+    ax.hexbin(var1.flatten(), var2.flatten(), xscale="log", yscale="log")
+    ax.set_xlabel("Particle Depth")
+    ax.set_ylabel("Particle Size")
+    # ax.set_xticks(np.arange(min(var1),max(var1), 1))
+    # ax.set_yticks(np.arange(min(var2),max(var2), 1))
+
+    # Save image
+    canvas = FigureCanvas(fig)
+    canvas.print_figure(out_file)
+
+    plt.cla()
+
+def scatter_plt_log(var1, var2, labels, km, fig, ax, out_file):
+    label_color = [CLUSTER_COLORS[l] for l in labels]
+    ax.scatter(var1.flatten(), var2.flatten(), c=label_color, s=1)
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.set_xlabel("Particle Depth")
+    ax.set_ylabel("Particle Size")
+    
     # Save image
     canvas = FigureCanvas(fig)
     canvas.print_figure(out_file)
