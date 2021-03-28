@@ -10,7 +10,7 @@ loc = LocationInfo(latitude=LA_lat, longitude=LA_lon)
 
 DATA_DIR = "/Users/tschmidt/repos/tgs_honours/good_data/16-ch2-aug08-SHORT/" # This one needs trailing / for goes lib
 DATA_DIR1 = "/Users/tschmidt/repos/tgs_honours/good_data/17-aerosols-apr24/" # This one needs trailing / for goes lib
-DATA_DIR2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-NEWDATE/" # This one needs trailing / for goes lib
+DATA_DIR2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul10/" # This one needs trailing / for goes lib
 
 
 # GOES.download('goes17', 'ABI-L1b-RadF', channel = ['06'],
@@ -21,10 +21,10 @@ DATA_DIR2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-NEWDATE/" # This one
 #               DateTimeIni = '20190807-220000', DateTimeFin = '20190808-050000',
 #               rename_fmt = '%Y%m%d%H%M', path_out = DATA_DIR2)
 
-current_time = datetime.strptime("20190602", '%Y%m%d')
+current_time = datetime.strptime("20190710", '%Y%m%d')
 s = sun(loc.observer, date=current_time)
-sunrise_time = s["sunrise"] + timedelta(hours=1)
-sunset_time = s["sunset"] - timedelta(hours=1)
+sunrise_time = s["sunrise"] + timedelta(hours=3)
+sunset_time = s["sunset"] - timedelta(hours=3)
 sunrise_time_str = sunrise_time.strftime("%Y%m%d-%H") + "0000"
 sunset_time_str = sunset_time.strftime("%Y%m%d-%H") + "0000"
 GOES.download('goes17', 'ABI-L1b-RadF', channel = ['02', '06', '07', '14'],

@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 
 def bt_ch07_temp_conv(var):
     fk1 = 2.00774e05
@@ -28,3 +29,15 @@ def main_func(rad_1, rad_2, first_ch, second_ch):
     func2 = find_bt_temp_conv(second_ch)
 
     return func2(rad_2) - func1(rad_1)
+
+def main_func_norm(rad_1, rad_2, first_ch, second_ch):
+    func1 = find_bt_temp_conv(first_ch)
+    func2 = find_bt_temp_conv(second_ch)
+
+    BTD = func2(rad_2) - func1(rad_1)
+
+    kernel_size = (120,120)
+    BTD_local_mean = scipy.ndimage.filters.generic_filter(BTD, np.nanmean, kernel_size)
+    BTD_local_SD = scipy.ndimage.filters.generic_filter(BTD, np.nanstd, kernel_size)
+
+    return (BTD-BTD_local_mean)/BTD_local_SD
