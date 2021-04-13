@@ -34,7 +34,7 @@ class MultiTrackerImproved:
             if success:
                 self.number_of_successes[i] = self.number_of_successes[i] + 1
                 self.all_boxes[pos][current_time_index] = box
-                if self.number_of_successes[i] >= 4:
+                if self.number_of_successes[i] >= 3:
                     self.confirmed_exhaust[pos] = True
             else:
                 trackers_to_delete.append(i)

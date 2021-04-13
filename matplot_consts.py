@@ -78,7 +78,9 @@ def main_func():
     # For scatterplots
     fig2 = plt.figure(dpi=150, figsize=(12, 9))
     ax2 = fig2.add_axes([0.1, 0.16, 0.80, 0.75])
-    ax2.set_xlabel("Local Mean Brightness Temperature (°C)")
-    ax2.set_ylabel("Local Standard Deviation Brightness Temperature (°C)")
 
-    return fig, ax, fig2, ax2, MapProj, FieldProj
+    # For hexbins
+    fig3 = plt.figure(dpi=150, figsize=(12, 9))
+    ax3 = fig3.add_axes([0.1, 0.16, 0.80, 0.75])
+
+    return fig, ax, fig2, ax2, fig3, ax3, MapProj, FieldProj

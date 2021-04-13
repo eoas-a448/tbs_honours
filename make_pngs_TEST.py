@@ -65,24 +65,24 @@ class InductiveClusterer(BaseEstimator):
 # DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-jul10/"
 # DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul10/"
 # DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul10/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jul03/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jul03/"
-DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul03/"
-DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-jul03/"
-DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul03/"
-DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul03/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jul03/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jul03/"
+# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul03/"
+# DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-jul03/"
+# DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul03/"
+# DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul03/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-aug08/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-aug08/"
 # DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-aug08/"
 # DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-aug08/"
 # DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-aug08/"
 # DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-aug08/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
-# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
-# DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-apr24/"
-# DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-apr24/"
-# DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-apr24/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
+DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
+DATA_DIR_6 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch6-apr24/"
+DATA_DIR_AER = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-apr24/"
+DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-apr24/"
 # DATA_DIR_CLEAR = "/Users/tschmidt/repos/tgs_honours/good_data/17-clear_sky-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jun02/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jun02/"
@@ -102,7 +102,7 @@ LLLat, URLat = 28, 38.5
 # WIDTH = 2682 # TODO: TEST ROBUSTNESS OF THESE
 
 # Get projection info along with axis and fig objects for matplotlib
-fig, ax, fig2, ax2, MapProj, FieldProj = matplot_consts.main_func()
+fig, ax, fig2, ax2, fig3, ax3, MapProj, FieldProj = matplot_consts.main_func()
 
 # Get contents of data dir for ch 7
 data_list_7 = os.listdir(DATA_DIR_7)
@@ -660,6 +660,15 @@ for ds_name_7 in data_list_7:
     size_mask = np.logical_and(np.logical_and(var_aer > 0, var_aer < 11), np.logical_and(np.logical_not(np.isnan(var_aer)), np.logical_and(var_depth > 10, var_depth < 30)))
     # size_mask = np.logical_and(np.logical_and(var_aer > 0, var_aer < 11), np.logical_not(np.isnan(var_aer)))
 
+    ###### TEST MANUAL LABELS ###########
+    true_label_path = "/Users/tschmidt/repos/tgs_honours/output/test_output/true_labels/0.png"
+    true_label = cv2.imread(true_label_path)[:,:,0] # Just have to use one band becuase it is white
+    true_label = true_label != 0
+
+    plot.scatter_plt_log(var_depth[np.logical_not(true_label)], var_aer[np.logical_not(true_label)], var_depth[true_label], var_aer[true_label], fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/TRACK_CLUSTER_" + str(i) + ".png")
+    plot.hexbin_log(var_depth, var_aer, i, fig3, ax3, "/Users/tschmidt/repos/tgs_honours/output/TRACK_CLUSTER_HEX_" + str(i) + ".png")
+    ####################################
+
     # filename = "early_" + str(i) + ".png"
     # file_path = os.path.join(OUT_DIR, filename)
     # labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
@@ -677,8 +686,8 @@ for ds_name_7 in data_list_7:
     file_path = os.path.join(OUT_DIR, filename)
     labels_slice = np.zeros([BTD.shape[0], BTD.shape[1]])
     # labels_slice = np.where(golden_arch_mask, 255.0, labels_slice)
-    labels_slice = np.where(size_mask, 255.0, labels_slice)
-    # labels_slice2 = np.where(np.isnan(var_aer), 255.0, labels_slice)
+    # labels_slice = np.where(size_mask, 255.0, labels_slice)
+    labels_slice = np.where(true_label, 255.0, labels_slice)
     labels = np.zeros([BTD.shape[0], BTD.shape[1], 3], dtype=np.float32)
     labels[:,:,2] = labels_slice
     # labels[:,:,1] = labels_slice2
@@ -704,13 +713,13 @@ for ds_name_7 in data_list_7:
     # file_path = os.path.join(OUT_DIR, filename)
     # plot.scatter_plt_no_cluster_log(var_depth, var_aer, fig2, ax2, file_path)
 
-    filename = "NEW_HEX_" + str(i) + ".png"
-    file_path = os.path.join(OUT_DIR, filename)
-    plot.hexbin_log(var_depth, var_aer, fig2, ax2, file_path)
+    # filename = "NEW_HEX_" + str(i) + ".png"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # plot.hexbin_log(var_depth, var_aer, fig2, ax2, file_path)
 
-    filename = "NEW_CLUSTER_" + str(i) + ".png"
-    file_path = os.path.join(OUT_DIR, filename)
-    plot.scatter_plt_log(var_depth, var_aer, size_mask.astype(int).flatten(), "km", fig2, ax2, file_path)
+    # filename = "NEW_CLUSTER_" + str(i) + ".png"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # plot.scatter_plt_log(var_depth, var_aer, size_mask.astype(int).flatten(), fig2, ax2, file_path)
 
     # norm_refls = (refl_var_ch02 - refl_var_ch06)/(refl_var_ch02 + refl_var_ch06)
     # min_aer = np.nanmin(norm_refls)

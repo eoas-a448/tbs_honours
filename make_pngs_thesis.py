@@ -5,20 +5,9 @@ from multi_tracker_improved import MultiTrackerImproved
 
 import GOES
 import numpy as np
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cf
-from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
-import matplotlib.ticker as mticker
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import os
 from skimage import feature
-from skimage import filters
-from skimage import morphology
 from skimage import transform
-from skimage.segmentation import active_contour
-from skimage.restoration import denoise_nl_means, estimate_sigma
 from cv2 import cv2
 import copy
 
@@ -63,21 +52,22 @@ class InductiveClusterer(BaseEstimator):
 # DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul10/"
 # DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul10/"
 # DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul10/"
-DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jul03/"
-DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jul03/"
-DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul03/"
-DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul03/"
-DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul03/"
+# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jul03/"
+# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jul03/"
+# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jul03/"
+# DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-jul03/"
+# DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-jul03/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-aug08/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-aug08/"
 # DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-aug08/"
 # DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-aug08/"
 # DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-aug08/"
-# DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
-# DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
-# DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
-# DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-apr24/"
-# DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-apr24/"
+DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-apr24/"
+DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-apr24/"
+DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-apr24/"
+DATA_DIR_SIZE = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_part_size-apr24/"
+DATA_DIR_DEPTH = "/Users/tschmidt/repos/tgs_honours/good_data/17-cloud_depth-apr24/"
+DATA_DIR_CLEAR = "/Users/tschmidt/repos/tgs_honours/good_data/17-clear_sky-apr24/"
 # DATA_DIR_7 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch7-jun02/"
 # DATA_DIR_14 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch14-jun02/"
 # DATA_DIR_2 = "/Users/tschmidt/repos/tgs_honours/good_data/17-ch2-jun02/"
@@ -92,7 +82,7 @@ LLLon, URLon = -135, -116.5
 LLLat, URLat = 28, 38.5
 
 # Get projection info along with axis and fig objects for matplotlib
-fig, ax, fig2, ax2, MapProj, FieldProj = matplot_consts.main_func()
+fig, ax, fig2, ax2, fig3, ax3, MapProj, FieldProj = matplot_consts.main_func()
 
 # Get contents of data dir for ch 7
 data_list_7 = os.listdir(DATA_DIR_7)
@@ -123,6 +113,12 @@ data_list_depth = os.listdir(DATA_DIR_DEPTH)
 if ".DS_Store" in data_list_depth:
     data_list_depth.remove(".DS_Store") # For mac users
 data_list_depth = sorted(data_list_depth)
+
+# Get contents of data dir for given clear sky mask
+data_list_clear = os.listdir(DATA_DIR_CLEAR)
+if ".DS_Store" in data_list_clear:
+    data_list_clear.remove(".DS_Store") # For mac users
+data_list_clear = sorted(data_list_clear)
 
 # Load ch7 for projection constants
 first_ds_name = data_list_7[0]
@@ -197,6 +193,12 @@ src = None
 geodf = None
 ############################################################
 
+# Make blue land highlight
+land_labels = np.zeros([var_ch07.shape[0], var_ch07.shape[1], 3], dtype=np.float32)
+land_labels[:,:,0] = np.where(land_masking, 255.0, land_labels[:,:,0])
+land_labels_canny = np.zeros([var_ch07.shape[0], var_ch07.shape[1], 3], dtype=np.uint8)
+land_labels_canny[:,:,0] = np.where(land_masking, 255, land_labels_canny[:,:,0])
+
 # Init multi-tracker
 trackers = MultiTrackerImproved(cv2.TrackerCSRT_create)
 
@@ -214,6 +216,8 @@ for ds_name_7 in data_list_7:
     ds_path_2 = os.path.join(DATA_DIR_2, ds_name_2)
     ds_path_size = os.path.join(DATA_DIR_SIZE, ds_name_size)
     ds_path_depth = os.path.join(DATA_DIR_DEPTH, ds_name_depth)
+    ds_name_clear = data_list_clear[i]
+    ds_path_clear = os.path.join(DATA_DIR_CLEAR, ds_name_clear)
 
     # Load channel 2
     ds_2 = GOES.open_dataset(ds_path_2)
@@ -285,6 +289,21 @@ for ds_name_7 in data_list_7:
         fill_value=fill_value
     )
 
+    # Load given open ocean mask
+    ds_clear = GOES.open_dataset(ds_path_clear)
+    var_clear, lons, lats = ds_clear.image("BCM", domain=[LLLon, URLon, LLLat, URLat])
+    var_clear, lons, lats = var_clear.data, lons.data, lats.data
+    swath_def = SwathDefinition(lons, lats)
+    var_clear = kd_tree.resample_nearest(
+        swath_def,
+        var_clear.ravel(),
+        area_def,
+        radius_of_influence=5000,
+        nprocs=2,
+        fill_value=fill_value
+    )
+    
+
     # Make BTD
     var = calc_BTD.main_func(var_ch14, var_ch07, 14, 7)
 
@@ -292,6 +311,25 @@ for ds_name_7 in data_list_7:
     if np.isnan(var).any():
         i = i + 1
         continue
+
+    # # Output true open ocean labels
+    # given_open_ocean = np.zeros([var_clear.shape[0], var_clear.shape[1]], dtype=np.float32)
+    # given_open_ocean = np.where(np.logical_and(var_clear == 0, np.logical_not(land_masking)), 1.0, given_open_ocean)
+    # filename = "true_ocean_" + str(i) + ".tif"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # with rasterio.open(
+    #     file_path,
+    #     "w",
+    #     driver="GTiff",
+    #     height=HEIGHT,
+    #     width=WIDTH,
+    #     count=1, #????
+    #     dtype=given_open_ocean.dtype,
+    #     crs=p_crs,
+    #     transform=new_affine,
+    #     nodata=fill_value,
+    # ) as dst:
+    #     dst.write(np.reshape(given_open_ocean,(1,HEIGHT,WIDTH)))
 
     # Make copy of the BTD for use as a backround in cv2 image output
     # Maps the BTD values to a range of [0,255]
@@ -341,12 +379,29 @@ for ds_name_7 in data_list_7:
     open_ocean_mask = np.zeros(var.shape, dtype=bool)
     open_ocean_mask[np.logical_and(np.logical_not(land_masking), np.logical_not(high_cloud_mask))] = open_ocean_mask_1D
 
-    # plot.scatter_plt(BT, var_ch02, kmeans_labels, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
-    # plot.hexbin(BT, var_ch02, fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
+    # plot.scatter_plt_2_cluster_legend(BT[IC_labels != open_ocean_label], var_ch02[IC_labels != open_ocean_label], BT[IC_labels == open_ocean_label], var_ch02[IC_labels == open_ocean_label], fig2, ax2, "/Users/tschmidt/repos/tgs_honours/output/cluster_" + str(i) + ".png")
+    # plot.hexbin(BT, var_ch02, i, fig3, ax3, "/Users/tschmidt/repos/tgs_honours/output/hex_" + str(i) + ".png")
 
     var = np.where(open_ocean_mask, np.nan, var)
-    # var_size = np.where(open_ocean_mask, np.nan, var_size)
-    # var_depth = np.where(open_ocean_mask, np.nan, var_depth)
+
+    # # Output generated ocean labels
+    # open_ocean = np.zeros([var_clear.shape[0], var_clear.shape[1]], dtype=np.float32)
+    # open_ocean = np.where(open_ocean_mask, 1.0, open_ocean)
+    # filename = "ocean_" + str(i) + ".tif"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # with rasterio.open(
+    #     file_path,
+    #     "w",
+    #     driver="GTiff",
+    #     height=HEIGHT,
+    #     width=WIDTH,
+    #     count=1, #????
+    #     dtype=open_ocean.dtype,
+    #     crs=p_crs,
+    #     transform=new_affine,
+    #     nodata=fill_value,
+    # ) as dst:
+    #     dst.write(np.reshape(open_ocean,(1,HEIGHT,WIDTH)))
     ###############################################################################################
 
     # Filter out the cold high altitude clouds
@@ -357,7 +412,8 @@ for ds_name_7 in data_list_7:
     # Make Canny ###########################################################
     # 0.8, 3, 7 worked for hard case!!!!!!
     # var = feature.canny(var, sigma = 3.0, low_threshold = 0, high_threshold = 1) # Was 0.3, 3, 10 #But maybe try HT set to 8?
-    var = feature.canny(var, sigma = 2.2, low_threshold = 0, high_threshold = 1.2)
+    # 2.5, 0, 0.8 jul 03
+    var = feature.canny(var, sigma = 2.5, low_threshold = 0, high_threshold = 0.8)
     var = np.where(var == np.nan, 0, var)
     ########################################################################
 
@@ -368,8 +424,8 @@ for ds_name_7 in data_list_7:
     # Was 0, 30, 1
     # NOW 0, 15, 1
     threshold = 0
-    minLineLength = 15
-    maxLineGap = 1
+    minLineLength = 40
+    maxLineGap = 3
     theta = np.linspace(-np.pi, np.pi, 1000)
 
     lines = transform.probabilistic_hough_line(var, threshold=threshold, line_length=minLineLength, line_gap=maxLineGap, theta=theta)
@@ -396,35 +452,39 @@ for ds_name_7 in data_list_7:
             trackers.add_tracker(img, rect, len(data_list_7))
     ###############################
 
-    # # Make line plots
-    # if lines is not None:
-    #     for line in lines:
-    #         p0, p1 = line
-    #         x1 = p0[0]
-    #         y1 = p0[1]
-    #         x2 = p1[0]
-    #         y2 = p1[1]
-    #         cv2.line(BTD_img,(x1,y1),(x2,y2),(0,255,0),2)
+    # Make line plots
+    if lines is not None:
+        for line in lines:
+            p0, p1 = line
+            x1 = p0[0]
+            y1 = p0[1]
+            x2 = p1[0]
+            y2 = p1[1]
+            # cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
+
+    # Add blue land highlight
+    img = cv2.addWeighted(img, 1.0, land_labels_canny, 1.0, 0)
 
     # Find ship track pixels ###################################################################################
     # def phil_eq(depth):
     #     return 7 + depth**(3/10)
 
     # August 08
-    # def phil_eq(depth):
-    #     return 6 + depth**(5/10)
-
     def phil_eq(depth):
-        return 7.8 + depth**(3/10)
+        return 6 + depth**(5/10)
+
+    # July 03
+    # def phil_eq(depth):
+    #     return 8 + depth**(3/10)
 
     size_func = phil_eq(var_depth)
 
     # ship_mask = np.logical_and(np.logical_and(var_size > size_func-1, var_size < size_func + 1), np.logical_and(var_size < 20, var_depth < 60))
     # ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < size_func), np.logical_and(np.logical_not(np.isnan(var_size)), np.logical_and(var_size < 20, var_depth < 30)))
     # ship_mask = np.logical_and(np.logical_and(var_size > size_func-0.3, var_size < size_func + 0.3), np.logical_and(np.logical_not(np.isnan(var_size)), np.logical_and(var_size < 20, var_depth < 30)))
-    # ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < size_func), np.logical_not(np.isnan(var_size))) # August 08
+    ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < size_func), np.logical_not(np.isnan(var_size))) # August 08
     # ship_mask = np.logical_and(np.logical_and(var_size > size_func - 3, var_size < size_func), np.logical_not(np.isnan(var_size)))
-    ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < 11), np.logical_and(np.logical_not(np.isnan(var_size)), np.logical_and(var_depth > 10, var_depth < 30)))
+    # ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < size_func), np.logical_and(np.logical_not(np.isnan(var_size)), np.logical_and(var_depth > 0, var_depth < 1000))) # Jul 03
     # ship_mask = np.logical_and(np.logical_and(var_size > 0, var_size < 11), np.logical_not(np.isnan(var_size)))
     ############################################################################################################
 
@@ -433,7 +493,14 @@ for ds_name_7 in data_list_7:
     file_path = os.path.join(OUT_DIR, filename)
     cv2.imwrite(file_path, img)
 
+    # Make BTD with blue highlighted land
     BTD_img2 = copy.deepcopy(BTD_img)
+    BTD_img2 = cv2.addWeighted(BTD_img2, 1.0, land_labels, 1.0, 0)
+    filename = "BTD_" + str(i) + ".png"
+    file_path = os.path.join(OUT_DIR, filename)
+    cv2.imwrite(file_path, BTD_img2)
+
+    # BTD_img2 = copy.deepcopy(BTD_img)
     filename = "NEW_MASK_" + str(i) + ".png"
     file_path = os.path.join(OUT_DIR, filename)
     labels_slice = np.zeros([BTD_img.shape[0], BTD_img.shape[1]])
@@ -443,33 +510,33 @@ for ds_name_7 in data_list_7:
     BTD_img2 = cv2.addWeighted(BTD_img2, 1.0, labels, 0.5, 0)
     cv2.imwrite(file_path, BTD_img2)
 
-    filename = "NEW_HEX_" + str(i) + ".png"
-    file_path = os.path.join(OUT_DIR, filename)
-    plot.hexbin_log(var_depth, var_size, fig2, ax2, file_path)
+    # filename = "NEW_HEX_" + str(i) + ".png"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # plot.hexbin_log(var_depth, var_size, i, fig3, ax3, file_path)
 
-    filename = "NEW_CLUSTER_" + str(i) + ".png"
-    file_path = os.path.join(OUT_DIR, filename)
-    plot.scatter_plt_log(var_depth, var_size, ship_mask.astype(int).flatten(), fig2, ax2, file_path)
+    # filename = "NEW_CLUSTER_" + str(i) + ".png"
+    # file_path = os.path.join(OUT_DIR, filename)
+    # plot.scatter_plt_log(var_depth[np.logical_not(ship_mask)], var_size[np.logical_not(ship_mask)], var_depth[ship_mask], var_size[ship_mask], fig2, ax2, file_path)
 
-    min_size = np.nanmin(var_size)
-    if min_size < 0:
-        var_size = var_size + np.abs(min_size)
-    max_size = np.nanmax(var_size)
-    var_size = var_size/max_size
-    var_size = cv2.cvtColor(var_size*255, cv2.COLOR_GRAY2BGR)
-    filename_size = "cloud_size_" + str(i) + ".png"
-    file_path_size = os.path.join(OUT_DIR, filename_size)
-    cv2.imwrite(file_path_size, var_size)
+    # min_size = np.nanmin(var_size)
+    # if min_size < 0:
+    #     var_size = var_size + np.abs(min_size)
+    # max_size = np.nanmax(var_size)
+    # var_size = var_size/max_size
+    # var_size = cv2.cvtColor(var_size*255, cv2.COLOR_GRAY2BGR)
+    # filename_size = "cloud_size_" + str(i) + ".png"
+    # file_path_size = os.path.join(OUT_DIR, filename_size)
+    # cv2.imwrite(file_path_size, var_size)
 
-    min_depth = np.nanmin(var_depth)
-    if min_depth < 0:
-        var_depth = var_depth + np.abs(min_depth)
-    max_depth = np.nanmax(var_depth)
-    var_depth = var_depth/max_depth
-    var_depth = cv2.cvtColor(var_depth*255, cv2.COLOR_GRAY2BGR)
-    filename_depth = "cloud_depth_" + str(i) + ".png"
-    file_path_depth = os.path.join(OUT_DIR, filename_depth)
-    cv2.imwrite(file_path_depth, var_depth)
+    # min_depth = np.nanmin(var_depth)
+    # if min_depth < 0:
+    #     var_depth = var_depth + np.abs(min_depth)
+    # max_depth = np.nanmax(var_depth)
+    # var_depth = var_depth/max_depth
+    # var_depth = cv2.cvtColor(var_depth*255, cv2.COLOR_GRAY2BGR)
+    # filename_depth = "cloud_depth_" + str(i) + ".png"
+    # file_path_depth = os.path.join(OUT_DIR, filename_depth)
+    # cv2.imwrite(file_path_depth, var_depth)
     ################################################################
     
     image_list.append(BTD_img)
@@ -500,9 +567,12 @@ for i in range(len(image_list)):
             labels_slice = np.where(box_slice, 255.0, labels_slice)
             labels[y:y+h, x:x+w, 2] = labels_slice # Add red for labels
 
-            cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (255.0, 0, 0), 2)
+            # cv2.rectangle(BTD_img, (x, y), (x + w, y + h), (0, 255.0, 0), 2)
 
+    # Add blue land highlight
+    BTD_img = cv2.addWeighted(BTD_img, 1.0, land_labels, 1.0, 0)
 
+    # Add all ship track labels
     BTD_img = cv2.addWeighted(BTD_img, 1.0, labels, 0.5, 0)
 
     cv2.imwrite(file_path, BTD_img)
